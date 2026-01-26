@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { PersonalTask, User, ServiceOrder } from '../types';
-import { CheckSquare, Plus, Calendar, Flag, Trash2, Search, Link as LinkIcon, CheckCircle2, Circle, Clock, AlertCircle, X, Check, Pencil } from 'lucide-react';
+import { CheckSquare, Plus, Calendar, Flag, Trash2, Search, Link as LinkIcon, CheckCircle2, AlertCircle, X, Check, Pencil } from 'lucide-react';
 
 interface TaskManagerProps {
   tasks: PersonalTask[];
@@ -78,11 +78,11 @@ export const TaskManager: React.FC<TaskManagerProps> = ({
       const taskData: PersonalTask = {
           id: editingTaskId || `TASK-${Date.now()}`,
           userId: currentUser.id,
-          title: newTask.title,
+          title: newTask.title!, // Assertion used here to satisfy TS
           description: newTask.description,
           dueDate: newTask.dueDate,
-          priority: newTask.priority || 'medium',
-          completed: false, // Status preserved via App logic if needed, but for edit we might want to keep current status.
+          priority: (newTask.priority as 'high' | 'medium' | 'low') || 'medium',
+          completed: false, // Status preserved via App logic if needed
           linkedOSId: newTask.linkedOSId
       };
 

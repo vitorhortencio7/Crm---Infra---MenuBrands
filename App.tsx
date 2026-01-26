@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Trello, DollarSign, PlusCircle, Settings, PieChart, CheckSquare, Moon, Sun, Users as UsersIcon } from 'lucide-react';
+import { LayoutDashboard, Trello, DollarSign, Settings, PieChart, CheckSquare, Moon, Sun, Users as UsersIcon } from 'lucide-react';
 import { Dashboard } from './components/Dashboard';
 import { KanbanBoard } from './components/KanbanBoard';
 import { FinanceTable } from './components/FinanceTable';
