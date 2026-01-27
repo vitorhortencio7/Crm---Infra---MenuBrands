@@ -92,3 +92,38 @@ export const DocumentModal: React.FC<DocumentModalProps> = ({ isOpen, onClose, o
                     </h4>
                     <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-lg p-4">
                         <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm font-medium text-emerald-800 dark:text-emerald-200">Total Gasto</span>
+                            <span className="text-lg font-bold text-emerald-700 dark:text-emerald-300">
+                                {totalCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </span>
+                        </div>
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400 opacity-80">
+                            {linkedExpenses.length} registro(s) financeiro(s) vinculado(s).
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 bg-slate-50 dark:bg-slate-700/30 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-700">
+            <button 
+                onClick={onClose}
+                className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
+            >
+                Cancelar
+            </button>
+            <button 
+                onClick={onConfirm}
+                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-lg shadow-indigo-500/20 flex items-center gap-2 transition-all active:scale-95"
+            >
+                <Archive size={16} />
+                Confirmar Arquivamento
+            </button>
+        </div>
+
+      </div>
+    </div>
+  );
+};
