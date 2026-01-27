@@ -17,7 +17,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
     if (!selectedUser) return;
     
     // For testing: allow empty password OR correct password
-    if (password === '' || selectedUser.password === password) {
+    if (selectedUser.password === password) {
       onLogin(selectedUser);
     } else {
       setError('Senha incorreta.');
