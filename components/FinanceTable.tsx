@@ -172,11 +172,17 @@ export const FinanceTable: React.FC<FinanceTableProps> = ({ expenses, orders, on
         return;
     }
     
+    // Correct date handling to prevent timezone shifts
+    // If we have a YYYY-MM-DD string, append noon UTC to ensure it stays on that day in most timezones
+    const dateToSave = newExpense.date 
+        ? new Date(newExpense.date + 'T12:00:00').toISOString() 
+        : new Date().toISOString();
+
     const expense: Expense = {
       id: `FIN-${Date.now().toString().slice(-4)}`,
       item: newExpense.item,
       value: Number(newExpense.value),
-      date: newExpense.date || new Date().toISOString(),
+      date: dateToSave,
       supplier: newExpense.supplier,
       warrantyPartsMonths: Number(newExpense.warrantyPartsMonths) || 0,
       warrantyServiceMonths: Number(newExpense.warrantyServiceMonths) || 0,

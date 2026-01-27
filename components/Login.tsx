@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User } from '../types';
-import { Lock, ArrowLeft, Plus, ShieldCheck, ChevronRight } from 'lucide-react';
+import { Lock, ArrowLeft, Plus, ShieldCheck, ChevronRight, BarChart3 } from 'lucide-react';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -22,6 +22,20 @@ export const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
     } else {
       setError('Senha incorreta.');
     }
+  };
+
+  const handleGuestLogin = () => {
+      const guestUser: User = {
+          id: 'guest',
+          name: 'Visitante Executivo',
+          email: 'guest@menubrands.com.br',
+          role: 'Visualização',
+          initials: 'EX',
+          color: 'bg-slate-700',
+          isAdmin: false,
+          isGuest: true
+      };
+      onLogin(guestUser);
   };
 
   const handleUserSelect = (user: User) => {
@@ -79,7 +93,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
                 <div className="w-full flex flex-col items-center animate-in fade-in duration-500">
                     <h2 className="text-2xl font-light text-white mb-8">Quem está acessando?</h2>
                     
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full mb-8">
                         {users.map(user => (
                             <button 
                                 key={user.id}
@@ -119,6 +133,18 @@ export const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
                             </div>
                         </div>
                     </div>
+
+                    {/* Executive Guest Login */}
+                    <button 
+                        onClick={handleGuestLogin}
+                        className="flex items-center gap-3 px-6 py-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition-all text-sm font-medium group hover:border-indigo-500/30"
+                    >
+                        <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400 group-hover:text-indigo-300 group-hover:bg-indigo-500/30 transition-colors">
+                            <BarChart3 size={16} />
+                        </div>
+                        <span>Acesso Executivo (Apenas Relatórios)</span>
+                        <ChevronRight size={16} className="text-slate-500 group-hover:text-white group-hover:translate-x-1 transition-all" />
+                    </button>
                 </div>
                 )}
 

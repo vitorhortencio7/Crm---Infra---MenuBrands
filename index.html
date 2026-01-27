@@ -15,6 +15,9 @@
             },
             colors: {
                // Custom colors extensions if needed
+            },
+            animation: {
+              'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
             }
           }
         }
@@ -34,6 +37,22 @@
           scrollbar-width: none;
       }
       
+      /* Custom styled scrollbar */
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent; 
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #cbd5e1; 
+        border-radius: 3px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8; 
+      }
+
       /* Dark mode scrollbar style override */
       .dark ::-webkit-scrollbar {
         width: 8px;
@@ -48,6 +67,13 @@
       }
       .dark ::-webkit-scrollbar-thumb:hover {
         background: #475569; 
+      }
+      
+      .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #334155;
+      }
+      .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #475569;
       }
     </style>
 <script type="importmap">

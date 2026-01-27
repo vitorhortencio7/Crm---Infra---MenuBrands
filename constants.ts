@@ -1,4 +1,4 @@
-import { Expense, ExpenseCategory, OSPriority, OSStatus, OSType, PaymentMethod, ServiceOrder, Unit, User, PersonalTask } from './types';
+import { Expense, ExpenseCategory, OSPriority, OSStatus, OSType, PaymentMethod, ServiceOrder, Unit, User, PersonalTask, Notification } from './types';
 
 export const USERS: User[] = [
   {
@@ -31,6 +31,38 @@ export const USERS: User[] = [
     password: '123',
     isAdmin: false
   }
+];
+
+export const INITIAL_NOTIFICATIONS: Notification[] = [
+    {
+        id: 'n1',
+        title: 'Nova OS Crítica',
+        message: 'Vitor abriu OS-26009 na Parquelândia.',
+        type: 'new_os',
+        date: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 min ago
+        read: false,
+        linkId: 'OS-26009',
+        userInitials: 'VI'
+    },
+    {
+        id: 'n2',
+        title: 'Manutenção Concluída',
+        message: 'Juliana finalizou a OS-26001 (Ar Condicionado).',
+        type: 'completed_os',
+        date: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(), // 5 hours ago
+        read: true,
+        linkId: 'OS-26001',
+        userInitials: 'JU'
+    },
+    {
+        id: 'n3',
+        title: 'Aprovação Financeira',
+        message: 'Gasto de R$ 1.500,00 registrado em Fábrica.',
+        type: 'finance',
+        date: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
+        read: false,
+        linkId: 'FIN-009'
+    }
 ];
 
 export const INITIAL_TASKS: PersonalTask[] = [
