@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Trello, DollarSign, Settings, PieChart, CheckSquare, Moon, Sun, Users as UsersIcon, LogOut, Briefcase } from 'lucide-react';
+import { LayoutDashboard, Trello, DollarSign, Settings, PieChart, CheckSquare, Moon, Sun, Users as UsersIcon, LogOut, Briefcase, Store } from 'lucide-react';
 import { Dashboard } from './components/Dashboard';
 import { KanbanBoard } from './components/KanbanBoard';
 import { FinanceTable } from './components/FinanceTable';
@@ -9,8 +9,9 @@ import { Reports } from './components/Reports';
 import { TaskManager } from './components/TaskManager';
 import { Sidebar } from './components/Sidebar';
 import { UserManagementModal } from './components/UserManagementModal';
-import { ServiceOrder, Expense, OSStatus, User, PersonalTask, Notification } from './types';
-import { INITIAL_ORDERS, INITIAL_EXPENSES, INITIAL_TASKS, USERS, INITIAL_NOTIFICATIONS } from './constants';
+import { SupplierManagementModal } from './components/SupplierManagementModal';
+import { ServiceOrder, Expense, OSStatus, User, PersonalTask, Notification, Supplier } from './types';
+import { INITIAL_ORDERS, INITIAL_EXPENSES, INITIAL_TASKS, USERS, INITIAL_NOTIFICATIONS, INITIAL_SUPPLIERS } from './constants';
 
 type View = 'dashboard' | 'kanban' | 'finance' | 'reports' | 'tasks' | 'settings';
 type Theme = 'light' | 'dark';
@@ -32,6 +33,9 @@ const App: React.FC = () => {
   const [tasks, setTasks] = useState<PersonalTask[]>(INITIAL_TASKS);
   // User State for management
   const [users, setUsers] = useState<User[]>(USERS);
+  // Supplier State
+  const [suppliers, setSuppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
+
   // Notification State
   const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
 
@@ -41,6 +45,8 @@ const App: React.FC = () => {
   
   // User Management Modal State
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  // Supplier Management Modal State
+  const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
 
   // --- PERSISTENCE REMOVED FOR TEST MODE ---
   // Data will reset on every page reload.
@@ -166,6 +172,10 @@ const App: React.FC = () => {
     });
   };
 
+  const handleUpdateExpense = (updatedExpense: Expense) => {
+    setExpenses(prev => prev.map(e => e.id === updatedExpense.id ? updatedExpense : e));
+  };
+
   const handleDeleteExpense = (id: string) => {
     setExpenses(prev => prev.filter(e => e.id !== id));
   };
@@ -211,6 +221,17 @@ const App: React.FC = () => {
       setUsers(prev => prev.filter(u => u.id !== userId));
   };
 
+  // Supplier Management Handlers
+  const handleAddSupplier = (supplier: Supplier) => {
+      setSuppliers(prev => [...prev, supplier]);
+  };
+  const handleUpdateSupplier = (updated: Supplier) => {
+      setSuppliers(prev => prev.map(s => s.id === updated.id ? updated : s));
+  };
+  const handleDeleteSupplier = (id: string) => {
+      setSuppliers(prev => prev.filter(s => s.id !== id));
+  };
+
   // Login Guard
   if (!currentUser) {
       return <Login onLogin={handleLogin} users={users} />;
@@ -252,7 +273,13 @@ const App: React.FC = () => {
 
             {/* Reports Content Only */}
             <main className="flex-1 overflow-auto p-8 max-w-7xl mx-auto w-full">
-                <Reports orders={orders} expenses={expenses} isDarkMode={theme === 'dark'} />
+                <Reports 
+                    orders={orders} 
+                    expenses={expenses} 
+                    isDarkMode={theme === 'dark'} 
+                    suppliers={suppliers} 
+                    onOpenOS={handleEditOS}
+                />
             </main>
         </div>
       );
@@ -306,7 +333,14 @@ const App: React.FC = () => {
         </header>
 
         <div className="p-6 md:p-8 max-w-[1600px] mx-auto w-full flex-1">
-          {currentView === 'dashboard' && <Dashboard orders={orders} expenses={expenses} isDarkMode={theme === 'dark'} />}
+          {currentView === 'dashboard' && (
+              <Dashboard 
+                orders={orders} 
+                expenses={expenses} 
+                isDarkMode={theme === 'dark'} 
+                onNavigate={setCurrentView} 
+              />
+          )}
           {currentView === 'kanban' && (
             <KanbanBoard 
                 orders={orders.filter(o => !o.archived)} // Filter out archived orders
@@ -317,11 +351,32 @@ const App: React.FC = () => {
                 onArchiveOrder={handleArchiveOS}
             />
           )}
-          {currentView === 'finance' && <FinanceTable expenses={expenses} orders={orders.filter(o => !o.archived)} onAddExpense={handleAddExpense} onDeleteExpense={handleDeleteExpense} onOpenOS={handleOpenOSFromFinance} />}
+          {currentView === 'finance' && (
+              <FinanceTable 
+                  // Filter out expenses linked to archived orders to prevent editing
+                  expenses={expenses.filter(e => {
+                      const linkedOS = orders.find(o => o.id === e.linkedOSId);
+                      return !linkedOS?.archived;
+                  })} 
+                  orders={orders.filter(o => !o.archived)} 
+                  onAddExpense={handleAddExpense} 
+                  onUpdateExpense={handleUpdateExpense}
+                  onDeleteExpense={handleDeleteExpense} 
+                  onOpenOS={handleOpenOSFromFinance} 
+                  suppliers={suppliers}
+                  onAddSupplier={handleAddSupplier}
+              />
+          )}
           
           {/* Reports Component */}
           {currentView === 'reports' && (
-             <Reports orders={orders} expenses={expenses} isDarkMode={theme === 'dark'} />
+             <Reports 
+                orders={orders} 
+                expenses={expenses} 
+                isDarkMode={theme === 'dark'} 
+                suppliers={suppliers}
+                onOpenOS={handleEditOS}
+             />
           )}
 
           {/* Task Manager Component */}
@@ -365,7 +420,22 @@ const App: React.FC = () => {
                     </div>
                  </div>
 
-                 {/* User Management Section (Replaces Units Management) */}
+                 {/* Supplier Management Section */}
+                 <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800">
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 border-b border-slate-100 dark:border-slate-800 pb-4">Gerenciar Prestadores</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                        Cadastre e organize a lista de prestadores para facilitar o lançamento de despesas.
+                    </p>
+                    <button 
+                        onClick={() => setIsSupplierModalOpen(true)}
+                        className="w-full py-3 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-indigo-300 dark:hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all text-sm font-bold flex items-center justify-center gap-2"
+                    >
+                        <Store size={18} />
+                        Gerenciar Prestadores
+                    </button>
+                 </div>
+
+                 {/* User Management Section */}
                  <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800">
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 border-b border-slate-100 dark:border-slate-800 pb-4">Gerenciar Usuários</h3>
                     <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
@@ -396,6 +466,8 @@ const App: React.FC = () => {
         onAddExpense={handleAddExpense}
         onDeleteExpense={handleDeleteExpense}
         currentUser={currentUser}
+        suppliers={suppliers}
+        onAddSupplier={handleAddSupplier}
       />
 
       <UserManagementModal 
@@ -405,6 +477,15 @@ const App: React.FC = () => {
         currentUser={currentUser}
         onUpdateUser={handleUpdateUser}
         onDeleteUser={handleDeleteUser}
+      />
+
+      <SupplierManagementModal 
+        isOpen={isSupplierModalOpen}
+        onClose={() => setIsSupplierModalOpen(false)}
+        suppliers={suppliers}
+        onAddSupplier={handleAddSupplier}
+        onUpdateSupplier={handleUpdateSupplier}
+        onDeleteSupplier={handleDeleteSupplier}
       />
     </div>
   );

@@ -690,9 +690,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ orders, expenses, onOr
                 </div>
                 <div className="px-6 py-3 border-t dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 flex justify-between items-center">
                     <span className="text-xs text-gray-500 dark:text-gray-400">Mostrando {sortedOrders.length} registros</span>
-                    <div className="flex gap-1">
-                        {/* Placeholder for pagination if needed later */}
-                    </div>
                 </div>
              </div>
         )}

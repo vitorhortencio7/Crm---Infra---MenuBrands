@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User } from '../types';
-import { Lock, ArrowLeft, Plus, ShieldCheck, ChevronRight, BarChart3 } from 'lucide-react';
+import { Lock, ArrowLeft, ShieldCheck, ChevronRight, BarChart3 } from 'lucide-react';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -16,8 +16,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
     e.preventDefault();
     if (!selectedUser) return;
     
-    // For testing: allow empty password OR correct password
-    if (password === '' || selectedUser.password === password) {
+    // Validação estrita: A senha deve corresponder exatamente
+    if (selectedUser.password === password) {
       onLogin(selectedUser);
     } else {
       setError('Senha incorreta.');
@@ -93,7 +93,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
                 <div className="w-full flex flex-col items-center animate-in fade-in duration-500">
                     <h2 className="text-2xl font-light text-white mb-8">Quem está acessando?</h2>
                     
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full mb-8">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 w-full mb-8 max-w-3xl">
                         {users.map(user => (
                             <button 
                                 key={user.id}
@@ -121,17 +121,6 @@ export const Login: React.FC<LoginProps> = ({ onLogin, users }) => {
                                 <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10 group-hover:ring-red-500/30 transition-all"></div>
                             </button>
                         ))}
-
-                        {/* "Add User" Placeholder */}
-                        <div className="flex flex-col items-center gap-4 p-5 rounded-2xl border border-dashed border-slate-700 bg-transparent opacity-40 cursor-not-allowed group">
-                            <div className="w-20 h-20 rounded-full bg-slate-800 flex items-center justify-center text-slate-500">
-                                <Plus className="w-8 h-8" />
-                            </div>
-                            <div className="text-center">
-                                <h3 className="font-semibold text-base text-slate-500">Novo</h3>
-                                <p className="text-[10px] text-slate-600 font-bold uppercase tracking-wider mt-1">Usuário</p>
-                            </div>
-                        </div>
                     </div>
 
                     {/* Executive Guest Login */}

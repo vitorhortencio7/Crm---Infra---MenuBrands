@@ -7,6 +7,7 @@ interface DashboardProps {
   orders: ServiceOrder[];
   expenses: Expense[];
   isDarkMode?: boolean;
+  onNavigate: (view: any) => void;
 }
 
 const COLORS = ['#3B82F6', '#A855F7', '#10B981', '#FF8042', '#8884d8'];
@@ -54,7 +55,7 @@ const UnitFilter = ({ value, onChange }: { value: string, onChange: (val: Unit |
     </div>
 );
 
-export const Dashboard: React.FC<DashboardProps> = ({ orders, expenses, isDarkMode = false }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ orders, expenses, isDarkMode = false, onNavigate }) => {
   const [statusUnitFilter, setStatusUnitFilter] = useState<Unit | 'ALL'>('ALL');
   const [osVolumeFilter, setOsVolumeFilter] = useState<Unit | 'ALL'>('ALL');
   const [expensesFilter, setExpensesFilter] = useState<Unit | 'ALL'>('ALL');
@@ -155,7 +156,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ orders, expenses, isDarkMo
                 <div className="flex items-center gap-1.5 mt-1">
                     <span className="text-[10px] text-gray-400">Dados consolidados.</span>
                     <button 
-                        onClick={() => alert("Aba de Relatórios será adicionada em breve!")}
+                        onClick={() => onNavigate('reports')}
                         className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 flex items-center gap-0.5 transition-colors hover:underline"
                     >
                         Clique aqui para conferir detalhes e relatórios <ArrowRight className="w-2.5 h-2.5" />

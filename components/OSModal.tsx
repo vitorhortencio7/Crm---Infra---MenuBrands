@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ServiceOrder, OSStatus, OSPriority, Unit, OSType, HistoryLog, Expense, User, ExpenseCategory, PaymentMethod } from '../types';
+import { ServiceOrder, OSStatus, OSPriority, Unit, OSType, HistoryLog, Expense, User, ExpenseCategory, PaymentMethod, Supplier } from '../types';
 import { USERS } from '../constants';
-import { X, Save, MessageSquare, Calendar, ArrowRightLeft, Plus, DollarSign, Trash2, AlertOctagon, Send, Clock, MapPin, Wrench, Paperclip, User as UserIcon } from 'lucide-react';
+import { X, Save, MessageSquare, Calendar, ArrowRightLeft, Plus, DollarSign, Trash2, AlertOctagon, Send, Clock, MapPin, Wrench, Paperclip, User as UserIcon, Lock, Search } from 'lucide-react';
 
 interface OSModalProps {
   isOpen: boolean;
@@ -12,6 +12,8 @@ interface OSModalProps {
   onAddExpense: (expense: Expense) => void;
   onDeleteExpense: (expenseId: string) => void;
   currentUser: User;
+  suppliers?: Supplier[];
+  onAddSupplier?: (supplier: Supplier) => void;
 }
 
 const STATUS_STYLES: Record<OSStatus, string> = {
@@ -22,7 +24,7 @@ const STATUS_STYLES: Record<OSStatus, string> = {
     [OSStatus.CANCELADA]: 'bg-red-100 text-red-700 border-red-200 shadow-[0_0_10px_rgba(239,68,68,0.3)]',
 };
 
-export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave, expenses, onAddExpense, onDeleteExpense, currentUser }) => {
+export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave, expenses, onAddExpense, onDeleteExpense, currentUser, suppliers = [], onAddSupplier }) => {
   const [formData, setFormData] = useState<Partial<ServiceOrder>>({});
   const [activeTab, setActiveTab] = useState<'details' | 'history' | 'finance'>('details');
   
@@ -30,6 +32,7 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
   const [newLog, setNewLog] = useState('');
   const [isSending, setIsSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Delegation State
   const [isDelegating, setIsDelegating] = useState(false);
@@ -45,6 +48,21 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
     warrantyServiceMonths: 0,
     date: new Date().toISOString().split('T')[0]
   });
+
+  // Supplier Dropdown State
+  const [isSupplierDropdownOpen, setIsSupplierDropdownOpen] = useState(false);
+  const supplierDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Click Outside Handler for Dropdown
+  useEffect(() => {
+      function handleClickOutside(event: MouseEvent) {
+          if (supplierDropdownRef.current && !supplierDropdownRef.current.contains(event.target as Node)) {
+              setIsSupplierDropdownOpen(false);
+          }
+      }
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Initialize Data
   useEffect(() => {
@@ -95,9 +113,39 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
   const owner = USERS.find(u => u.id === formData.ownerId);
   const isEditing = !!order; 
   const isClosedStatus = formData.status === OSStatus.CONCLUIDA || formData.status === OSStatus.CANCELADA;
+  
+  // Read-Only Logic: If Archived OR Status is Concluded/Cancelled
+  const isReadOnly = formData.archived || (isEditing && isClosedStatus);
+
+  // Filter Logic for Supplier Dropdown
+  const filteredSuppliersList = suppliers?.filter(s =>
+    s.name.toLowerCase().includes((newExpenseData.supplier || '').toLowerCase()) ||
+    s.category.toLowerCase().includes((newExpenseData.supplier || '').toLowerCase())
+  ) || [];
+
+  const handleSelectSupplier = (supplierName: string) => {
+      setNewExpenseData({ ...newExpenseData, supplier: supplierName });
+      setIsSupplierDropdownOpen(false);
+  };
+
+  const handleQuickAddSupplier = () => {
+      if (!newExpenseData.supplier || !onAddSupplier) return;
+      
+      const newSup: Supplier = {
+          id: `sup-${Date.now()}`,
+          name: newExpenseData.supplier,
+          category: 'Geral', // Default category
+          contact: ''
+      };
+      
+      onAddSupplier(newSup);
+      setIsSupplierDropdownOpen(false);
+  };
 
   // Handlers
   const handleSave = () => {
+    if (isReadOnly) return; // Prevent save if read-only
+
     if (!formData.title) {
       alert("Preencha o Título da OS");
       return;
@@ -152,6 +200,7 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
   };
 
   const handleDelegate = () => {
+     if(isReadOnly) return;
      if(!selectedDelegate) return;
      const newOwner = USERS.find(u => u.id === selectedDelegate);
      if(!newOwner) return;
@@ -178,6 +227,7 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
   };
 
   const handleAddLog = async () => {
+    if (isReadOnly) return;
     if (!newLog.trim()) return;
     setIsSending(true);
     await new Promise(resolve => setTimeout(resolve, 300)); 
@@ -192,7 +242,21 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
     setIsSending(false);
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          const log: HistoryLog = {
+              id: Date.now().toString(),
+              date: new Date().toISOString(),
+              message: `📎 Arquivo anexado: ${file.name} (Simulação)`,
+              userId: currentUser.id
+          };
+          setFormData(prev => ({ ...prev, history: [...(prev.history || []), log] }));
+      }
+  };
+
   const handleSaveExpense = () => {
+      if (isReadOnly) return;
       if (!newExpenseData.item || !newExpenseData.value || !newExpenseData.supplier || !newExpenseData.date) {
           alert('Preencha campos obrigatórios (*)');
           return;
@@ -252,7 +316,8 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
       return groups;
   };
 
-  const inputClass = "w-full border border-gray-200 dark:border-slate-600 rounded-xl p-3 bg-gray-50 dark:bg-slate-700/50 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-700 focus:outline-none transition-all placeholder-gray-400";
+  const inputClass = `w-full border border-gray-200 dark:border-slate-600 rounded-xl p-3 bg-gray-50 dark:bg-slate-700/50 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-700 focus:outline-none transition-all placeholder-gray-400 ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''}`;
+  const numberInputClass = `${inputClass} [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`;
   const labelClass = "block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1.5 ml-1";
 
   return (
@@ -289,6 +354,11 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
                        <div className="w-1.5 h-1.5 rounded-full bg-current"></div>
                        {formData.status || 'Nova'}
                     </span>
+                    {isReadOnly && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-slate-600 flex items-center gap-1">
+                            <Lock size={10} /> Arquivada
+                        </span>
+                    )}
                 </div>
             </div>
             
@@ -306,13 +376,15 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
                           <span className="text-[8px] text-slate-400 uppercase font-bold">Resp.</span>
                           <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">{owner?.name.split(' ')[0] || '-'}</span>
                       </div>
-                      <button 
-                        onClick={() => { setIsDelegating(true); setSelectedDelegate(''); }} 
-                        className="ml-1 p-1 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-full text-slate-400 hover:text-indigo-500 transition-colors"
-                        title="Trocar Responsável"
-                      >
-                        <ArrowRightLeft size={12}/>
-                      </button>
+                      {!isReadOnly && (
+                        <button 
+                            onClick={() => { setIsDelegating(true); setSelectedDelegate(''); }} 
+                            className="ml-1 p-1 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-full text-slate-400 hover:text-indigo-500 transition-colors"
+                            title="Trocar Responsável"
+                        >
+                            <ArrowRightLeft size={12}/>
+                        </button>
+                      )}
                 </div>
                 
                 <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
@@ -340,7 +412,7 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
         <div className={`flex-1 overflow-y-auto relative ${activeTab === 'history' ? 'bg-slate-100 dark:bg-slate-900' : 'bg-white dark:bg-slate-800 p-6'}`}>
             
             {/* Delegation Overlay */}
-            {isDelegating && (
+            {isDelegating && !isReadOnly && (
                 <div className="absolute inset-0 bg-white/95 dark:bg-slate-800/95 z-40 flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
                     <h4 className="text-lg font-bold mb-4 flex items-center gap-2">
                          <ArrowRightLeft className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
@@ -378,6 +450,7 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
                                 onChange={e => setFormData({...formData, title: e.target.value})} 
                                 placeholder="Ex: Conserto do Ar Condicionado"
                                 autoFocus 
+                                disabled={isReadOnly}
                             />
                         </div>
                         
@@ -386,7 +459,7 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
                                 <label className={labelClass}>Unidade</label>
                                 <div className="relative">
                                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                    <select className={`${inputClass} pl-10`} value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value as Unit})}>
+                                    <select className={`${inputClass} pl-10`} value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value as Unit})} disabled={isReadOnly}>
                                         {Object.values(Unit).map(u => <option key={u} value={u}>{u}</option>)}
                                     </select>
                                 </div>
@@ -395,7 +468,7 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
                                 <label className={labelClass}>Tipo</label>
                                 <div className="relative">
                                     <Wrench className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                    <select className={`${inputClass} pl-10`} value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as OSType})}>
+                                    <select className={`${inputClass} pl-10`} value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as OSType})} disabled={isReadOnly}>
                                         {Object.values(OSType).map(t => <option key={t} value={t}>{t}</option>)}
                                     </select>
                                 </div>
@@ -404,7 +477,7 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
 
                         <div>
                             <label className={labelClass}>Descrição Detalhada</label>
-                            <textarea rows={5} className={inputClass} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Descreva o problema com detalhes..." />
+                            <textarea rows={5} className={inputClass} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Descreva o problema com detalhes..." disabled={isReadOnly} />
                         </div>
                      </div>
 
@@ -415,13 +488,13 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
                         <div className="bg-slate-50 dark:bg-slate-700/30 p-4 rounded-xl border border-slate-100 dark:border-slate-600 space-y-4">
                             <div>
                                 <label className={labelClass}>Status Atual</label>
-                                <select className={`${inputClass} font-semibold`} value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as OSStatus})}>
+                                <select className={`${inputClass} font-semibold`} value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as OSStatus})} disabled={isReadOnly}>
                                     {Object.values(OSStatus).map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>
                             <div>
                                 <label className={labelClass}>Prioridade</label>
-                                <select className={inputClass} value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as OSPriority})}>
+                                <select className={inputClass} value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as OSPriority})} disabled={isReadOnly}>
                                     {Object.values(OSPriority).map(p => <option key={p} value={p}>{p}</option>)}
                                 </select>
                             </div>
@@ -429,12 +502,12 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
                             {isClosedStatus ? (
                                 <div>
                                     <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1 mb-1.5"><Calendar size={12}/> Data de Fechamento</label>
-                                    <input type="date" className={inputClass} value={formData.dateClosed ? new Date(formData.dateClosed).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]} onChange={e => setFormData({...formData, dateClosed: e.target.value})} />
+                                    <input type="date" className={inputClass} value={formData.dateClosed ? new Date(formData.dateClosed).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]} onChange={e => setFormData({...formData, dateClosed: e.target.value})} disabled={isReadOnly} />
                                 </div>
                             ) : (
                                 <div>
                                     <label className={labelClass}>Abertura de OS</label>
-                                    <input type="date" className={inputClass} value={formData.dateOpened ? new Date(formData.dateOpened).toISOString().split('T')[0] : ''} onChange={e => setFormData({...formData, dateOpened: e.target.value})} />
+                                    <input type="date" className={inputClass} value={formData.dateOpened ? new Date(formData.dateOpened).toISOString().split('T')[0] : ''} onChange={e => setFormData({...formData, dateOpened: e.target.value})} disabled={isReadOnly} />
                                 </div>
                             )}
                         </div>
@@ -511,15 +584,22 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
                     </div>
                     
                     {/* Input Area */}
+                    {!isReadOnly && (
                     <div className="p-3 bg-white dark:bg-slate-800 border-t dark:border-slate-700 shrink-0">
                         <div className="flex items-end gap-2 bg-slate-100 dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-700">
                             <button 
                                 className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors"
                                 title="Anexar arquivo"
-                                onClick={() => alert("Upload de arquivos será implementado em breve.")}
+                                onClick={() => fileInputRef.current?.click()}
                             >
                                 <Paperclip size={20} />
                             </button>
+                            <input 
+                                type="file" 
+                                ref={fileInputRef} 
+                                className="hidden" 
+                                onChange={handleFileSelect}
+                            />
                             <textarea 
                                 className="flex-1 bg-transparent border-none outline-none text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 resize-none py-2 max-h-32"
                                 placeholder="Digite sua mensagem..."
@@ -542,6 +622,7 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
                             </button>
                         </div>
                     </div>
+                    )}
                 </div>
             )}
 
@@ -553,19 +634,19 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
                          <span className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{totalCost.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</span>
                      </div>
                      
-                     {!isAddingExpense ? (
+                     {!isAddingExpense && !isReadOnly ? (
                          <button onClick={() => setIsAddingExpense(true)} className="w-full py-4 border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-2xl text-gray-500 font-bold hover:border-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all flex items-center justify-center gap-2">
                              <Plus size={18} /> Adicionar Despesa
                          </button>
-                     ) : (
-                         <div className="bg-gray-50 dark:bg-slate-700/50 p-6 rounded-2xl border border-gray-200 dark:border-slate-600 animate-in fade-in slide-in-from-top-2">
+                     ) : isAddingExpense && (
+                         <div className="bg-gray-50 dark:bg-slate-700/50 p-6 rounded-2xl border border-gray-200 dark:border-slate-600 animate-in fade-in slide-in-from-top-2 pb-32">
                              <h4 className="font-bold mb-4 flex items-center gap-2 text-slate-700 dark:text-slate-200"><DollarSign size={18}/> Novo Gasto</h4>
                              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
                                  <div className="col-span-2 lg:col-span-3">
                                      <label className={labelClass}>Item*</label>
                                      <input type="text" className={inputClass} placeholder="Ex: Peça X" value={newExpenseData.item || ''} onChange={e => setNewExpenseData({...newExpenseData, item: e.target.value})} />
                                  </div>
-                                 <div><label className={labelClass}>Valor*</label><input type="number" className={inputClass} value={newExpenseData.value || ''} onChange={e => setNewExpenseData({...newExpenseData, value: parseFloat(e.target.value)})} /></div>
+                                 <div><label className={labelClass}>Valor*</label><input type="number" className={numberInputClass} value={newExpenseData.value || ''} onChange={e => setNewExpenseData({...newExpenseData, value: parseFloat(e.target.value)})} /></div>
                                  <div><label className={labelClass}>Data*</label><input type="date" className={inputClass} value={newExpenseData.date || ''} onChange={e => setNewExpenseData({...newExpenseData, date: e.target.value})} /></div>
                                  <div>
                                      <label className={labelClass}>Categoria*</label>
@@ -573,10 +654,60 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
                                          {Object.values(ExpenseCategory).map(c => <option key={c} value={c}>{c}</option>)}
                                      </select>
                                  </div>
-                                 <div className="col-span-2">
-                                     <label className={labelClass}>Fornecedor*</label>
-                                     <input type="text" className={inputClass} value={newExpenseData.supplier || ''} onChange={e => setNewExpenseData({...newExpenseData, supplier: e.target.value})} />
+                                 
+                                 {/* Custom Supplier Dropdown */}
+                                 <div className="col-span-2 relative" ref={supplierDropdownRef}>
+                                     <label className={labelClass}>Prestador*</label>
+                                     <div className="relative">
+                                         <input 
+                                            type="text" 
+                                            className={inputClass} 
+                                            value={newExpenseData.supplier || ''} 
+                                            onChange={e => {
+                                                setNewExpenseData({...newExpenseData, supplier: e.target.value});
+                                                setIsSupplierDropdownOpen(true);
+                                            }}
+                                            onFocus={() => setIsSupplierDropdownOpen(true)}
+                                            placeholder="Busque ou cadastre..."
+                                         />
+                                         <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                            <Search size={14} />
+                                         </div>
+                                     </div>
+
+                                     {isSupplierDropdownOpen && (newExpenseData.supplier || filteredSuppliersList.length > 0) && (
+                                        <div className="absolute z-20 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                                            {filteredSuppliersList.length > 0 ? (
+                                                <ul className="py-1 text-sm text-gray-700 dark:text-gray-200">
+                                                    {filteredSuppliersList.map(sup => (
+                                                        <li 
+                                                            key={sup.id}
+                                                            className="px-4 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:text-emerald-700 dark:hover:text-emerald-400 cursor-pointer flex justify-between items-center"
+                                                            onClick={() => handleSelectSupplier(sup.name)}
+                                                        >
+                                                            <span>{sup.name}</span>
+                                                            <span className="text-[10px] bg-gray-100 dark:bg-slate-600 px-1.5 py-0.5 rounded text-gray-500 dark:text-gray-300">{sup.category}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            ) : null}
+                                            
+                                            {/* Quick Add Option - Always visible if there is input text, offering to create a new one even if matches found */}
+                                            {newExpenseData.supplier && (
+                                                <div className="p-2 border-t dark:border-slate-600 bg-gray-50 dark:bg-slate-700/50 sticky bottom-0">
+                                                    <button 
+                                                        onClick={handleQuickAddSupplier}
+                                                        className="w-full text-left px-2 py-1.5 text-sm font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-md flex items-center gap-2"
+                                                    >
+                                                        <Plus size={14} />
+                                                        Cadastrar "{newExpenseData.supplier}"
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                     )}
                                  </div>
+
                                  <div>
                                      <label className={labelClass}>Pagamento*</label>
                                      <select className={inputClass} value={newExpenseData.paymentMethod} onChange={e => setNewExpenseData({...newExpenseData, paymentMethod: e.target.value as PaymentMethod})}>
@@ -611,7 +742,9 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
                                          </td>
                                          <td className="px-5 py-3 font-bold text-emerald-600">{e.value.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}</td>
                                          <td className="px-5 py-3 text-right">
-                                             <button onClick={() => setExpenseToDelete(e)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16}/></button>
+                                             {!isReadOnly && (
+                                                <button onClick={() => setExpenseToDelete(e)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16}/></button>
+                                             )}
                                          </td>
                                      </tr>
                                  ))}
@@ -626,10 +759,16 @@ export const OSModal: React.FC<OSModalProps> = ({ isOpen, onClose, order, onSave
         {/* Footer (Hidden in Chat to maximize space) */}
         {activeTab !== 'history' && (
             <div className="p-5 border-t dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 flex justify-end gap-3 rounded-b-3xl shrink-0">
-                <button onClick={onClose} className="px-5 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-xl text-sm font-bold transition-colors">Cancelar</button>
-                <button onClick={handleSave} className="px-8 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 flex items-center gap-2 text-sm font-bold shadow-lg shadow-indigo-500/20 active:scale-95 transition-all">
-                    <Save className="w-4 h-4" /> Salvar Alterações
-                </button>
+                {isReadOnly ? (
+                    <button onClick={onClose} className="px-6 py-2.5 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-white rounded-xl text-sm font-bold transition-colors">Fechar</button>
+                ) : (
+                    <>
+                        <button onClick={onClose} className="px-5 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-xl text-sm font-bold transition-colors">Cancelar</button>
+                        <button onClick={handleSave} className="px-8 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 flex items-center gap-2 text-sm font-bold shadow-lg shadow-indigo-500/20 active:scale-95 transition-all">
+                            <Save className="w-4 h-4" /> Salvar Alterações
+                        </button>
+                    </>
+                )}
             </div>
         )}
 

@@ -1,13 +1,16 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Expense, ExpenseCategory, Unit, ServiceOrder, PaymentMethod } from '../types';
-import { Plus, Search, Trash2, Link as LinkIcon, Filter, CalendarDays, X, Save, Check, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { Expense, ExpenseCategory, Unit, ServiceOrder, PaymentMethod, Supplier } from '../types';
+import { Plus, Search, Trash2, Link as LinkIcon, Filter, CalendarDays, X, Save, Check, ArrowUp, ArrowDown, ArrowUpDown, Pencil, Store } from 'lucide-react';
 
 interface FinanceTableProps {
   expenses: Expense[];
   orders: ServiceOrder[];
   onAddExpense: (expense: Expense) => void;
+  onUpdateExpense: (expense: Expense) => void;
   onDeleteExpense: (id: string) => void;
   onOpenOS: (osId: string) => void;
+  suppliers?: Supplier[];
+  onAddSupplier?: (supplier: Supplier) => void;
 }
 
 const MONTHS = [
@@ -18,9 +21,10 @@ const MONTHS = [
 // Updated Years as requested
 const YEARS = [2026, 2027];
 
-export const FinanceTable: React.FC<FinanceTableProps> = ({ expenses, orders, onAddExpense, onDeleteExpense, onOpenOS }) => {
+export const FinanceTable: React.FC<FinanceTableProps> = ({ expenses, orders, onAddExpense, onUpdateExpense, onDeleteExpense, onOpenOS, suppliers = [], onAddSupplier }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   
   // Date Filters State - Multi-select
   const [selectedYear, setSelectedYear] = useState(2026); // Default to 2026
@@ -34,6 +38,10 @@ export const FinanceTable: React.FC<FinanceTableProps> = ({ expenses, orders, on
   const [isOsDropdownOpen, setIsOsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Supplier Search State for the Modal
+  const [isSupplierDropdownOpen, setIsSupplierDropdownOpen] = useState(false);
+  const supplierDropdownRef = useRef<HTMLDivElement>(null);
+
   const [newExpense, setNewExpense] = useState<Partial<Expense>>({
     unit: Unit.ALDEOTA,
     category: ExpenseCategory.PECAS,
@@ -43,11 +51,14 @@ export const FinanceTable: React.FC<FinanceTableProps> = ({ expenses, orders, on
     date: new Date().toISOString().split('T')[0]
   });
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOsDropdownOpen(false);
+      }
+      if (supplierDropdownRef.current && !supplierDropdownRef.current.contains(event.target as Node)) {
+        setIsSupplierDropdownOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -166,9 +177,32 @@ export const FinanceTable: React.FC<FinanceTableProps> = ({ expenses, orders, on
     os.title.toLowerCase().includes(osSearchTerm.toLowerCase())
   );
 
+  // Filter Logic for Supplier Dropdown inside Modal
+  const filteredSuppliersList = suppliers?.filter(s =>
+    s.name.toLowerCase().includes((newExpense.supplier || '').toLowerCase()) ||
+    s.category.toLowerCase().includes((newExpense.supplier || '').toLowerCase())
+  ) || [];
+
+  const handleEditClick = (expense: Expense) => {
+      setNewExpense({
+          ...expense,
+          date: new Date(expense.date).toISOString().split('T')[0]
+      });
+      setEditingId(expense.id);
+      
+      if(expense.linkedOSId) {
+          const os = orders.find(o => o.id === expense.linkedOSId);
+          setOsSearchTerm(os ? `${os.id} - ${os.title}` : expense.linkedOSId);
+      } else {
+          setOsSearchTerm('');
+      }
+      
+      setIsAdding(true);
+  };
+
   const handleSave = () => {
     if (!newExpense.item || !newExpense.value || !newExpense.supplier) {
-        alert("Preencha os campos obrigatórios: Item, Valor e Fornecedor");
+        alert("Preencha os campos obrigatórios: Item, Valor e Prestador");
         return;
     }
     
@@ -179,7 +213,7 @@ export const FinanceTable: React.FC<FinanceTableProps> = ({ expenses, orders, on
         : new Date().toISOString();
 
     const expense: Expense = {
-      id: `FIN-${Date.now().toString().slice(-4)}`,
+      id: editingId || `FIN-${Date.now().toString().slice(-4)}`,
       item: newExpense.item,
       value: Number(newExpense.value),
       date: dateToSave,
@@ -192,19 +226,29 @@ export const FinanceTable: React.FC<FinanceTableProps> = ({ expenses, orders, on
       linkedOSId: newExpense.linkedOSId || undefined
     };
 
-    onAddExpense(expense);
-    setIsAdding(false);
-    // Reset form
-    setNewExpense({
-        unit: Unit.ALDEOTA,
-        category: ExpenseCategory.PECAS,
-        paymentMethod: PaymentMethod.PIX,
-        warrantyPartsMonths: 0,
-        warrantyServiceMonths: 0,
-        date: new Date().toISOString().split('T')[0],
-        linkedOSId: ''
-    });
-    setOsSearchTerm('');
+    if (editingId) {
+        onUpdateExpense(expense);
+    } else {
+        onAddExpense(expense);
+    }
+
+    handleCloseModal();
+  };
+
+  const handleCloseModal = () => {
+      setIsAdding(false);
+      setEditingId(null);
+      // Reset form
+      setNewExpense({
+          unit: Unit.ALDEOTA,
+          category: ExpenseCategory.PECAS,
+          paymentMethod: PaymentMethod.PIX,
+          warrantyPartsMonths: 0,
+          warrantyServiceMonths: 0,
+          date: new Date().toISOString().split('T')[0],
+          linkedOSId: ''
+      });
+      setOsSearchTerm('');
   };
 
   const handleSelectOS = (os: ServiceOrder | null) => {
@@ -216,6 +260,25 @@ export const FinanceTable: React.FC<FinanceTableProps> = ({ expenses, orders, on
         setOsSearchTerm('');
       }
       setIsOsDropdownOpen(false);
+  };
+
+  const handleSelectSupplier = (supplierName: string) => {
+      setNewExpense({ ...newExpense, supplier: supplierName });
+      setIsSupplierDropdownOpen(false);
+  };
+
+  const handleQuickAddSupplier = () => {
+      if (!newExpense.supplier || !onAddSupplier) return;
+      
+      const newSup: Supplier = {
+          id: `sup-${Date.now()}`,
+          name: newExpense.supplier,
+          category: 'Geral', // Default category
+          contact: ''
+      };
+      
+      onAddSupplier(newSup);
+      setIsSupplierDropdownOpen(false);
   };
 
   // Helper for Sortable Table Headers
@@ -275,7 +338,10 @@ export const FinanceTable: React.FC<FinanceTableProps> = ({ expenses, orders, on
           <p className="text-gray-500 dark:text-gray-400 text-sm">Gerencie gastos de manutenção e peças.</p>
         </div>
         <button 
-          onClick={() => setIsAdding(true)}
+          onClick={() => {
+              setEditingId(null);
+              setIsAdding(true);
+          }}
           className="bg-emerald-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-emerald-700 transition shadow-sm"
         >
           <Plus className="w-4 h-4" />
@@ -335,9 +401,9 @@ export const FinanceTable: React.FC<FinanceTableProps> = ({ expenses, orders, on
               {/* Modal Header */}
               <div className="p-6 border-b dark:border-slate-700 flex justify-between items-center bg-gray-50 dark:bg-slate-800/50 rounded-t-xl shrink-0">
                  <h3 className="text-xl font-bold text-emerald-800 dark:text-emerald-400 flex items-center gap-2">
-                    Adicionar Novo Gasto
+                    {editingId ? 'Editar Gasto' : 'Adicionar Novo Gasto'}
                  </h3>
-                 <button onClick={() => setIsAdding(false)} className="p-2 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-full text-gray-500 dark:text-gray-400 transition-colors">
+                 <button onClick={handleCloseModal} className="p-2 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-full text-gray-500 dark:text-gray-400 transition-colors">
                     <X className="w-5 h-5" />
                  </button>
               </div>
@@ -379,16 +445,60 @@ export const FinanceTable: React.FC<FinanceTableProps> = ({ expenses, orders, on
                     </div>
 
                     {/* Row 2: Supplier & Classification */}
-                    <div className="lg:col-span-2">
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">Fornecedor</label>
-                        <input 
-                            type="text" 
-                            className={inputClass}
-                            value={newExpense.supplier || ''}
-                            onChange={e => setNewExpense({...newExpense, supplier: e.target.value})}
-                            placeholder="Ex: Magazine Luiza, Sr. José..."
-                        />
+                    <div className="lg:col-span-2 relative" ref={supplierDropdownRef}>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">Prestador de Serviço</label>
+                        <div className="relative">
+                            <input 
+                                type="text" 
+                                className={inputClass}
+                                value={newExpense.supplier || ''}
+                                onChange={e => {
+                                    setNewExpense({...newExpense, supplier: e.target.value});
+                                    setIsSupplierDropdownOpen(true);
+                                }}
+                                onFocus={() => setIsSupplierDropdownOpen(true)}
+                                placeholder="Digite para buscar ou cadastrar..."
+                            />
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                <Search size={14} />
+                            </div>
+                        </div>
+
+                        {isSupplierDropdownOpen && (newExpense.supplier || filteredSuppliersList.length > 0) && (
+                            <div className="absolute z-20 w-full mt-1 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                                {filteredSuppliersList.length > 0 ? (
+                                    <ul className="py-1 text-sm text-gray-700 dark:text-gray-200">
+                                        {filteredSuppliersList.map(sup => (
+                                            <li 
+                                                key={sup.id}
+                                                className="px-4 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:text-emerald-700 dark:hover:text-emerald-400 cursor-pointer flex justify-between items-center"
+                                                onClick={() => handleSelectSupplier(sup.name)}
+                                            >
+                                                <span>{sup.name}</span>
+                                                <span className="text-[10px] bg-gray-100 dark:bg-slate-600 px-1.5 py-0.5 rounded text-gray-500 dark:text-gray-300">{sup.category}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : null}
+                                
+                                {/* Quick Add Option if typed name doesn't match perfectly */}
+                                {newExpense.supplier && !filteredSuppliersList.some(s => s.name.toLowerCase() === newExpense.supplier?.toLowerCase()) && (
+                                    <div 
+                                        className="p-2 border-t dark:border-slate-600 bg-gray-50 dark:bg-slate-700/50"
+                                    >
+                                        <button 
+                                            onClick={handleQuickAddSupplier}
+                                            className="w-full text-left px-2 py-1.5 text-sm font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-md flex items-center gap-2"
+                                        >
+                                            <Plus size={14} />
+                                            Cadastrar "{newExpense.supplier}"
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
+
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">Unidade</label>
                         <select 
@@ -505,9 +615,9 @@ export const FinanceTable: React.FC<FinanceTableProps> = ({ expenses, orders, on
 
               {/* Modal Footer */}
               <div className="p-4 border-t dark:border-slate-700 flex justify-end gap-3 bg-gray-50 dark:bg-slate-800/50 rounded-b-xl shrink-0">
-                 <button onClick={() => setIsAdding(false)} className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors">Cancelar</button>
+                 <button onClick={handleCloseModal} className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors">Cancelar</button>
                  <button onClick={handleSave} className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2 text-sm font-medium shadow-sm transition-colors">
-                    <Save className="w-4 h-4" /> Salvar Gasto
+                    <Save className="w-4 h-4" /> {editingId ? 'Salvar Alterações' : 'Salvar Gasto'}
                  </button>
               </div>
            </div>
@@ -565,14 +675,24 @@ export const FinanceTable: React.FC<FinanceTableProps> = ({ expenses, orders, on
                     ) : '-'}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button 
-                        onClick={() => {
-                            if(window.confirm('Tem certeza que deseja apagar este gasto?')) onDeleteExpense(expense.id);
-                        }}
-                        className="text-red-500 hover:text-red-700 dark:hover:text-red-400 p-1"
-                    >
-                        <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex justify-end gap-1">
+                        <button 
+                            onClick={() => handleEditClick(expense)}
+                            className="text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-400 p-1.5 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+                            title="Editar"
+                        >
+                            <Pencil className="w-4 h-4" />
+                        </button>
+                        <button 
+                            onClick={() => {
+                                if(window.confirm('Tem certeza que deseja apagar este gasto?')) onDeleteExpense(expense.id);
+                            }}
+                            className="text-red-500 hover:text-red-700 dark:hover:text-red-400 p-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                            title="Excluir"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -1,4 +1,4 @@
-import { Expense, ExpenseCategory, OSPriority, OSStatus, OSType, PaymentMethod, ServiceOrder, Unit, User, PersonalTask, Notification } from './types';
+import { Expense, ExpenseCategory, OSPriority, OSStatus, OSType, PaymentMethod, ServiceOrder, Unit, User, PersonalTask, Notification, Supplier } from './types';
 
 export const USERS: User[] = [
   {
@@ -31,6 +31,17 @@ export const USERS: User[] = [
     password: '123',
     isAdmin: false
   }
+];
+
+export const INITIAL_SUPPLIERS: Supplier[] = [
+    { id: 'sup1', name: 'ClimaFrio Ltda', contactName: 'Paulo Roberto', category: 'Refrigeração', contact: '(85) 99999-1111' },
+    { id: 'sup2', name: 'Leroy Merlin', contactName: 'Vendas Corporativas', category: 'Material de Construção', contact: 'SAC' },
+    { id: 'sup3', name: 'SOS Elétrica', contactName: 'Sr. Carlos', category: 'Elétrica', contact: '(85) 98888-2222' },
+    { id: 'sup4', name: 'Casa do Eletricista', contactName: 'Roberto', category: 'Material Elétrico', contact: '(85) 3232-0000' },
+    { id: 'sup5', name: 'Refrigeração Silva', contactName: 'Silva', category: 'Refrigeração', contact: '(85) 97777-3333' },
+    { id: 'sup6', name: 'Engenharia Gás Total', contactName: 'Eng. Marcos', category: 'Gás e Tubulação', contact: '(85) 96666-4444' },
+    { id: 'sup7', name: 'FrioMax', contactName: 'Júnior', category: 'Manutenção Geral', contact: '(85) 95555-5555' },
+    { id: 'sup8', name: 'Magalu', contactName: 'Site/App', category: 'Varejo', contact: 'Site' },
 ];
 
 export const INITIAL_NOTIFICATIONS: Notification[] = [

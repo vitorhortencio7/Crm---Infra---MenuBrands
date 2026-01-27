@@ -1,12 +1,14 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { ServiceOrder, Expense, Unit, OSStatus, OSType, ExpenseCategory } from '../types';
+import { ServiceOrder, Expense, Unit, OSStatus, OSType, ExpenseCategory, Supplier } from '../types';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
-import { FileText, Filter, Calendar, TrendingUp, DollarSign, Activity, Search, ArrowUpRight, Download, ChevronDown, Hourglass, Zap, Check, Layers, ArrowDown, ArrowUp, ArrowUpDown, FileCheck, PieChart as PieChartIcon } from 'lucide-react';
+import { FileText, Filter, Calendar, TrendingUp, DollarSign, Activity, Search, ArrowUpRight, Download, ChevronDown, Hourglass, Zap, Check, Layers, ArrowDown, ArrowUp, ArrowUpDown, FileCheck, PieChart as PieChartIcon, Contact, Phone, User as UserIcon, X, Archive, Lock, Link as LinkIcon } from 'lucide-react';
 
 interface ReportsProps {
   orders: ServiceOrder[];
   expenses: Expense[];
+  suppliers: Supplier[];
   isDarkMode?: boolean;
+  onOpenOS: (order: ServiceOrder) => void;
 }
 
 // Colors adapted for better contrast and modern look
@@ -98,9 +100,13 @@ const FilterDropdown = ({
 };
 
 
-export const Reports: React.FC<ReportsProps> = ({ orders, expenses, isDarkMode = false }) => {
+export const Reports: React.FC<ReportsProps> = ({ orders, expenses, suppliers, isDarkMode = false, onOpenOS }) => {
   // --- SUBMENU STATE ---
-  const [activeTab, setActiveTab] = useState<'managerial' | 'financial' | 'closed_os'>('managerial');
+  const [activeTab, setActiveTab] = useState<'managerial' | 'financial' | 'closed_os' | 'financial_records'>('managerial');
+
+  // --- SUPPLIER LIST MODAL STATE ---
+  const [isSupplierListOpen, setIsSupplierListOpen] = useState(false);
+  const [supplierSearch, setSupplierSearch] = useState('');
 
   // --- GLOBAL FILTERS STATE (CHARTS) ---
   const [selectedYear, setSelectedYear] = useState(2026);
@@ -245,6 +251,64 @@ export const Reports: React.FC<ReportsProps> = ({ orders, expenses, isDarkMode =
       });
   }, [expenses, selectedYear, selectedUnits, selectedMonths]);
 
+  // 4. Supplier Search Filter
+  const filteredSuppliers = useMemo(() => {
+      if(!supplierSearch) return suppliers;
+      const lower = supplierSearch.toLowerCase();
+      return suppliers.filter(s => 
+          s.name.toLowerCase().includes(lower) || 
+          s.category.toLowerCase().includes(lower) ||
+          (s.contactName && s.contactName.toLowerCase().includes(lower))
+      );
+  }, [suppliers, supplierSearch]);
+
+  // 5. Archived Expenses (Financial Records Tab)
+  const archivedExpenses = useMemo(() => {
+      let data = expenses.filter(e => {
+          const linkedOS = orders.find(o => o.id === e.linkedOSId);
+          return linkedOS?.archived === true;
+      });
+
+      // Apply Table Filters (Year, Unit, Search)
+      data = data.filter(e => new Date(e.date).getFullYear() === tableYear);
+      
+      if (tableUnits.length > 0) {
+          data = data.filter(e => tableUnits.includes(e.unit));
+      }
+
+      if (searchTerm) {
+          const lowerSearch = searchTerm.toLowerCase();
+          data = data.filter(e => 
+              e.item.toLowerCase().includes(lowerSearch) ||
+              e.supplier.toLowerCase().includes(lowerSearch) ||
+              e.id.toLowerCase().includes(lowerSearch) ||
+              (e.linkedOSId && e.linkedOSId.toLowerCase().includes(lowerSearch))
+          );
+      }
+
+      // Sort
+      if (sortConfig) {
+          data.sort((a, b) => {
+              let valA: any = '';
+              let valB: any = '';
+
+              switch(sortConfig.key) {
+                  case 'item': valA = a.item.toLowerCase(); valB = b.item.toLowerCase(); break;
+                  case 'value': valA = a.value; valB = b.value; break;
+                  case 'date': valA = new Date(a.date).getTime(); valB = new Date(b.date).getTime(); break;
+                  case 'unit': valA = a.unit.toLowerCase(); valB = b.unit.toLowerCase(); break;
+                  case 'linkedOSId': valA = a.linkedOSId || ''; valB = b.linkedOSId || ''; break;
+                  default: return 0;
+              }
+              if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+              if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+              return 0;
+          });
+      }
+
+      return data;
+  }, [expenses, orders, tableYear, tableUnits, searchTerm, sortConfig]);
+
 
   // --- CALCULATIONS & KPIs ---
   const totalSpent = filteredExpenses.reduce((acc, curr) => acc + curr.value, 0);
@@ -349,8 +413,34 @@ export const Reports: React.FC<ReportsProps> = ({ orders, expenses, isDarkMode =
     return null;
   };
 
+  // --- CSV EXPORT FUNCTIONALITY ---
+  const handleExportCSV = () => {
+      const headers = ['ID', 'Data', 'Categoria', 'Item', 'Valor', 'Unidade', 'Fornecedor', 'Pagamento'];
+      const rows = filteredExpenses.map(e => [
+          e.id,
+          new Date(e.date).toLocaleDateString('pt-BR'),
+          e.category,
+          `"${e.item.replace(/"/g, '""')}"`, // Escape quotes
+          e.value.toFixed(2),
+          e.unit,
+          e.supplier,
+          e.paymentMethod
+      ]);
+
+      const csvContent = "data:text/csv;charset=utf-8," + 
+          [headers.join(','), ...rows.map(e => e.join(','))].join("\n");
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `financeiro_menubrands_${selectedYear}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+  };
+
   // Helper for Sortable Table Headers
-  const SortableHeader = ({ label, sortKey, align = 'left', width }: { label: string, sortKey?: string, align?: 'left' | 'center' | 'right', width?: string }) => (
+  const SortableHeader = ({ label, sortKey, align = 'left', width, className }: { label: string, sortKey?: string, align?: 'left' | 'center' | 'right', width?: string, className?: string }) => (
     <th 
       className={`
           px-6 py-4 text-xs font-bold uppercase tracking-wider transition-colors select-none
@@ -358,6 +448,7 @@ export const Reports: React.FC<ReportsProps> = ({ orders, expenses, isDarkMode =
           ${align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left'}
           ${sortKey ? 'cursor-pointer hover:bg-slate-100/80 dark:hover:bg-slate-700/80 hover:text-indigo-600 dark:hover:text-indigo-400 group' : 'text-slate-400 dark:text-slate-500'}
           ${sortConfig?.key === sortKey ? 'bg-indigo-50/50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'}
+          ${className || ''}
       `}
       onClick={() => sortKey && handleSort(sortKey)}
     >
@@ -382,13 +473,24 @@ export const Reports: React.FC<ReportsProps> = ({ orders, expenses, isDarkMode =
       {/* Header & SUBMENU */}
       <div className="flex flex-col gap-6">
         <div className="flex justify-between items-start xl:items-center">
-            <div>
-                <h2 className="text-3xl font-extrabold text-slate-800 dark:text-white tracking-tight">Relatórios</h2>
+            <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-4">
+                    <h2 className="text-3xl font-extrabold text-slate-800 dark:text-white tracking-tight">Relatórios</h2>
+                    
+                    {/* Supplier Directory Button (Read-Only) */}
+                    <button 
+                        onClick={() => setIsSupplierListOpen(true)}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all text-xs font-bold shadow-sm"
+                        title="Ver lista de contatos"
+                    >
+                        <Contact size={14} /> Lista de Fornecedores
+                    </button>
+                </div>
                 <p className="text-slate-500 dark:text-slate-400 mt-1 font-medium">Análise detalhada da operação e finanças.</p>
             </div>
             
             {/* Global Filter Bar (Visible only for Managerial and Financial Tabs) */}
-            {activeTab !== 'closed_os' && (
+            {activeTab !== 'closed_os' && activeTab !== 'financial_records' && (
                 <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-2 pr-3 rounded-3xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] border border-slate-100 dark:border-slate-700 relative z-40">
                     {/* Year Dropdown */}
                     <FilterDropdown 
@@ -488,7 +590,7 @@ export const Reports: React.FC<ReportsProps> = ({ orders, expenses, isDarkMode =
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl w-fit">
+        <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl w-fit flex-wrap">
             <button 
                 onClick={() => setActiveTab('managerial')}
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'managerial' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
@@ -509,6 +611,13 @@ export const Reports: React.FC<ReportsProps> = ({ orders, expenses, isDarkMode =
             >
                 <FileCheck size={16} />
                 OS Concluídas
+            </button>
+            <button 
+                onClick={() => setActiveTab('financial_records')}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'financial_records' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+            >
+                <Archive size={16} />
+                Histórico Financeiro
             </button>
         </div>
       </div>
@@ -637,11 +746,11 @@ export const Reports: React.FC<ReportsProps> = ({ orders, expenses, isDarkMode =
             
             <div className="flex justify-end">
                 <button 
-                    onClick={() => alert('Funcionalidade de exportação será implementada no backend.')}
+                    onClick={handleExportCSV}
                     className="flex items-center gap-2 bg-slate-900 dark:bg-slate-700 text-white hover:bg-slate-800 dark:hover:bg-slate-600 px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-slate-300 dark:shadow-none hover:shadow-xl active:scale-95 text-sm font-bold group" 
                 >
                     <Download className="w-4 h-4 group-hover:animate-bounce" />
-                    Exportar Relatório PDF
+                    Exportar Relatório CSV
                 </button>
             </div>
 
@@ -733,7 +842,6 @@ export const Reports: React.FC<ReportsProps> = ({ orders, expenses, isDarkMode =
       {/* --- CONTENT: CLOSED OS TABLE --- */}
       {activeTab === 'closed_os' && (
         <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm relative animate-in slide-in-from-bottom-4 duration-500">
-            
             {/* Enhanced Toolbar */}
             <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex flex-col gap-6">
                 <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4">
@@ -741,8 +849,7 @@ export const Reports: React.FC<ReportsProps> = ({ orders, expenses, isDarkMode =
                         <h3 className="text-xl font-bold text-slate-800 dark:text-white">Ordens de Serviços Concluídas</h3>
                         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Acervo completo de manutenções finalizadas.</p>
                     </div>
-                    
-                    {/* Table Filters & Controls */}
+                    {/* Filters... (Same as before) */}
                     <div className="flex flex-col sm:flex-row gap-2">
                         {/* Search */}
                         <div className="relative w-full sm:w-64">
@@ -757,62 +864,15 @@ export const Reports: React.FC<ReportsProps> = ({ orders, expenses, isDarkMode =
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
                         </div>
-
-                        {/* Table Specific Year */}
-                        <FilterDropdown 
-                            label={tableYear.toString()} 
-                            isOpen={showTableYearDrop} 
-                            setIsOpen={setShowTableYearDrop} 
-                            icon={Calendar}
-                            compact
-                        >
-                            <div className="flex flex-col p-1">
-                                {YEARS.map(year => (
-                                    <button
-                                        key={year}
-                                        onClick={() => { setTableYear(year); setShowTableYearDrop(false); }}
-                                        className={`px-4 py-2 text-left rounded-xl text-sm font-semibold transition-colors ${tableYear === year ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
-                                    >
-                                        {year}
-                                    </button>
-                                ))}
-                            </div>
+                        {/* Table Specific Year & Units... */}
+                        {/* (Dropdowns reused from original code) */}
+                        <FilterDropdown label={tableYear.toString()} isOpen={showTableYearDrop} setIsOpen={setShowTableYearDrop} icon={Calendar} compact>
+                            <div className="flex flex-col p-1">{YEARS.map(year => (<button key={year} onClick={() => { setTableYear(year); setShowTableYearDrop(false); }} className={`px-4 py-2 text-left rounded-xl text-sm font-semibold transition-colors ${tableYear === year ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>{year}</button>))}</div>
                         </FilterDropdown>
-
-                        {/* Table Specific Units */}
-                        <FilterDropdown 
-                            label={tableUnits.length === 0 ? "Todas Sedes" : tableUnits.length === 1 ? tableUnits[0] : "Sedes"} 
-                            count={tableUnits.length > 0 ? tableUnits.length : undefined}
-                            isOpen={showTableUnitDrop} 
-                            setIsOpen={setShowTableUnitDrop} 
-                            icon={Filter}
-                            compact
-                        >
+                        <FilterDropdown label={tableUnits.length === 0 ? "Todas Sedes" : tableUnits.length === 1 ? tableUnits[0] : "Sedes"} count={tableUnits.length > 0 ? tableUnits.length : undefined} isOpen={showTableUnitDrop} setIsOpen={setShowTableUnitDrop} icon={Filter} compact>
                             <div className="flex flex-col">
-                                <div className="p-2 border-b border-slate-50 dark:border-slate-700 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-800 z-10">
-                                    <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider pl-2">Filtrar</span>
-                                    {tableUnits.length > 0 && (
-                                        <button onClick={clearTableUnits} className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 font-medium px-2">Limpar</button>
-                                    )}
-                                </div>
-                                <div className="p-2 space-y-1">
-                                    {Object.values(Unit).map((u) => {
-                                        const isSelected = tableUnits.includes(u);
-                                        return (
-                                            <button
-                                                key={u}
-                                                onClick={() => toggleTableUnit(u)}
-                                                className={`
-                                                    w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all group
-                                                    ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium'}
-                                                `}
-                                            >
-                                                <span>{u}</span>
-                                                {isSelected && <Check size={14} className="text-indigo-600 dark:text-indigo-400" />}
-                                            </button>
-                                        )
-                                    })}
-                                </div>
+                                <div className="p-2 border-b border-slate-50 dark:border-slate-700 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-800 z-10"><span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider pl-2">Filtrar</span>{tableUnits.length > 0 && (<button onClick={clearTableUnits} className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 font-medium px-2">Limpar</button>)}</div>
+                                <div className="p-2 space-y-1">{Object.values(Unit).map((u) => {const isSelected = tableUnits.includes(u); return (<button key={u} onClick={() => toggleTableUnit(u)} className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all group ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium'}`}><span>{u}</span>{isSelected && <Check size={14} className="text-indigo-600 dark:text-indigo-400" />}</button>)})}</div>
                             </div>
                         </FilterDropdown>
                     </div>
@@ -827,68 +887,113 @@ export const Reports: React.FC<ReportsProps> = ({ orders, expenses, isDarkMode =
                             <SortableHeader label="Detalhes" sortKey="title" />
                             <SortableHeader label="Unidade" sortKey="unit" />
                             <SortableHeader label="Datas" sortKey="date" />
-                            <SortableHeader label="Custo Final" sortKey="cost" align="right" />
-                            <th className="px-6 py-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider text-center rounded-r-xl">Ação</th>
+                            <SortableHeader label="Custo Final" sortKey="cost" align="right" className="rounded-r-xl" />
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
                         {archivedOrders.map(os => {
-                            // Access pre-calculated cost from useMemo
                             const osCost = (os as any).computedCost || 0;
-                            
-                            const duration = os.dateClosed 
-                                ? Math.ceil(Math.abs(new Date(os.dateClosed).getTime() - new Date(os.dateOpened).getTime()) / (1000 * 3600 * 24)) 
-                                : 0;
-
+                            const duration = os.dateClosed ? Math.ceil(Math.abs(new Date(os.dateClosed).getTime() - new Date(os.dateOpened).getTime()) / (1000 * 3600 * 24)) : 0;
                             return (
-                                <tr key={os.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/50 transition-colors group">
-                                    <td className="px-6 py-5">
-                                        <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1 rounded-md">{os.id}</span>
-                                    </td>
-                                    <td className="px-6 py-5">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-500 dark:text-slate-400">
-                                                <FileText size={16} />
-                                            </div>
-                                            <div>
-                                                <div className="font-bold text-slate-800 dark:text-slate-200 text-sm mb-0.5">{os.title}</div>
-                                                <div className="text-xs text-slate-500 dark:text-slate-400 font-medium inline-block bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">{os.type}</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-5">
-                                        <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">{os.unit}</span>
-                                    </td>
-                                    <td className="px-6 py-5">
-                                        <div className="flex flex-col gap-1">
-                                            <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                                                <Calendar size={12} /> {os.dateClosed ? new Date(os.dateClosed).toLocaleDateString('pt-BR') : '-'}
-                                            </span>
-                                            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">{duration} dias ativos</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-5 text-right">
-                                        <span className="font-bold text-slate-800 dark:text-slate-200 text-sm block">
-                                            {osCost > 0 ? osCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-5 text-center">
-                                        <button className="text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 p-2 rounded-xl transition-all" title="Ver Detalhes">
-                                            <ArrowUpRight className="w-5 h-5" />
-                                        </button>
-                                    </td>
+                                <tr key={os.id} onClick={() => onOpenOS(os)} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/50 transition-colors group cursor-pointer">
+                                    <td className="px-6 py-5"><span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1 rounded-md">{os.id}</span></td>
+                                    <td className="px-6 py-5"><div className="flex items-center gap-3"><div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg text-slate-500 dark:text-slate-400"><FileText size={16} /></div><div><div className="font-bold text-slate-800 dark:text-slate-200 text-sm mb-0.5">{os.title}</div><div className="text-xs text-slate-500 dark:text-slate-400 font-medium inline-block bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">{os.type}</div></div></div></td>
+                                    <td className="px-6 py-5"><span className="text-sm font-semibold text-slate-600 dark:text-slate-300">{os.unit}</span></td>
+                                    <td className="px-6 py-5"><div className="flex flex-col gap-1"><span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1"><Calendar size={12} /> {os.dateClosed ? new Date(os.dateClosed).toLocaleDateString('pt-BR') : '-'}</span><span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">{duration} dias ativos</span></div></td>
+                                    <td className="px-6 py-5 text-right"><span className="font-bold text-slate-800 dark:text-slate-200 text-sm block">{osCost > 0 ? osCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}</span></td>
                                 </tr>
                             );
                         })}
-                        {archivedOrders.length === 0 && (
+                        {archivedOrders.length === 0 && (<tr><td colSpan={5} className="px-6 py-20 text-center"><div className="flex flex-col items-center justify-center opacity-40"><div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mb-4"><Search className="w-8 h-8 text-slate-400 dark:text-slate-500" /></div><p className="text-slate-600 dark:text-slate-400 font-medium">Nenhum registro encontrado.</p><p className="text-sm text-slate-400 dark:text-slate-500">Ordens arquivadas aparecerão aqui.</p></div></td></tr>)}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+      )}
+
+      {/* --- CONTENT: FINANCIAL RECORDS (FROZEN EXPENSES) --- */}
+      {activeTab === 'financial_records' && (
+        <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm relative animate-in slide-in-from-bottom-4 duration-500">
+            {/* Toolbar */}
+            <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex flex-col gap-6">
+                <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4">
+                    <div>
+                        <h3 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                            Histórico Financeiro
+                            <Lock size={16} className="text-slate-400" />
+                        </h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Registros consolidados de ordens finalizadas (Somente Leitura).</p>
+                    </div>
+                    
+                    {/* Reuse Filters */}
+                    <div className="flex flex-col sm:flex-row gap-2">
+                        <div className="relative w-full sm:w-64">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <Search className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                            </div>
+                            <input 
+                                type="text" 
+                                placeholder="Buscar..." 
+                                className="block w-full pl-9 pr-3 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl leading-5 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:bg-white dark:focus:bg-slate-600 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition duration-150 ease-in-out text-xs font-medium"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                        <FilterDropdown label={tableYear.toString()} isOpen={showTableYearDrop} setIsOpen={setShowTableYearDrop} icon={Calendar} compact>
+                            <div className="flex flex-col p-1">{YEARS.map(year => (<button key={year} onClick={() => { setTableYear(year); setShowTableYearDrop(false); }} className={`px-4 py-2 text-left rounded-xl text-sm font-semibold transition-colors ${tableYear === year ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>{year}</button>))}</div>
+                        </FilterDropdown>
+                        <FilterDropdown label={tableUnits.length === 0 ? "Todas Sedes" : tableUnits.length === 1 ? tableUnits[0] : "Sedes"} count={tableUnits.length > 0 ? tableUnits.length : undefined} isOpen={showTableUnitDrop} setIsOpen={setShowTableUnitDrop} icon={Filter} compact>
+                            <div className="flex flex-col">
+                                <div className="p-2 border-b border-slate-50 dark:border-slate-700 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-800 z-10"><span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider pl-2">Filtrar</span>{tableUnits.length > 0 && (<button onClick={clearTableUnits} className="text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400 font-medium px-2">Limpar</button>)}</div>
+                                <div className="p-2 space-y-1">{Object.values(Unit).map((u) => {const isSelected = tableUnits.includes(u); return (<button key={u} onClick={() => toggleTableUnit(u)} className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all group ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-medium'}`}><span>{u}</span>{isSelected && <Check size={14} className="text-indigo-600 dark:text-indigo-400" />}</button>)})}</div>
+                            </div>
+                        </FilterDropdown>
+                    </div>
+                </div>
+            </div>
+
+            <div className="overflow-x-auto p-4 rounded-b-3xl">
+                <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50/50 dark:bg-slate-700/50">
+                        <tr>
+                            <th className="px-6 py-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider rounded-l-xl select-none">ID</th>
+                            <SortableHeader label="Item / Serviço" sortKey="item" />
+                            <SortableHeader label="Data" sortKey="date" />
+                            <SortableHeader label="Unidade" sortKey="unit" />
+                            <SortableHeader label="OS Vinculada" sortKey="linkedOSId" />
+                            <SortableHeader label="Valor" sortKey="value" align="right" className="rounded-r-xl" />
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 dark:divide-slate-700">
+                        {archivedExpenses.map(expense => (
+                            <tr key={expense.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/50 transition-colors group">
+                                <td className="px-6 py-4 font-mono text-xs text-slate-500 dark:text-slate-400">{expense.id}</td>
+                                <td className="px-6 py-4">
+                                    <div className="font-bold text-slate-800 dark:text-slate-200 text-sm">{expense.item}</div>
+                                    <div className="text-xs text-slate-500 dark:text-slate-400">{expense.supplier}</div>
+                                </td>
+                                <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{new Date(expense.date).toLocaleDateString('pt-BR')}</td>
+                                <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{expense.unit}</td>
+                                <td className="px-6 py-4">
+                                    {expense.linkedOSId ? (
+                                        <span className="flex items-center gap-1 text-xs font-mono text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded w-fit">
+                                            <LinkIcon size={10} /> {expense.linkedOSId}
+                                        </span>
+                                    ) : '-'}
+                                </td>
+                                <td className="px-6 py-4 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                                    {expense.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </td>
+                            </tr>
+                        ))}
+                        {archivedExpenses.length === 0 && (
                             <tr>
                                 <td colSpan={6} className="px-6 py-20 text-center">
                                     <div className="flex flex-col items-center justify-center opacity-40">
                                         <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mb-4">
-                                            <Search className="w-8 h-8 text-slate-400 dark:text-slate-500" />
+                                            <Archive className="w-8 h-8 text-slate-400 dark:text-slate-500" />
                                         </div>
                                         <p className="text-slate-600 dark:text-slate-400 font-medium">Nenhum registro encontrado.</p>
-                                        <p className="text-sm text-slate-400 dark:text-slate-500">Ordens arquivadas aparecerão aqui.</p>
                                     </div>
                                 </td>
                             </tr>
@@ -898,6 +1003,89 @@ export const Reports: React.FC<ReportsProps> = ({ orders, expenses, isDarkMode =
             </div>
         </div>
       )}
+
+      {/* --- SUPPLIER LIST MODAL (READ-ONLY) --- */}
+      {isSupplierListOpen && (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-100 dark:border-slate-700 flex flex-col max-h-[80vh] animate-in zoom-in-95 duration-200">
+                {/* Modal Header */}
+                <div className="p-5 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-gray-50 dark:bg-slate-800/80">
+                    <div>
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                            <Contact className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                            Diretório de Prestadores
+                        </h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Lista de contatos para consulta rápida.</p>
+                    </div>
+                    <button 
+                        onClick={() => { setIsSupplierListOpen(false); setSupplierSearch(''); }}
+                        className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-400 transition-colors"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+
+                {/* Search Bar */}
+                <div className="p-4 border-b border-slate-100 dark:border-slate-700">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input 
+                            type="text" 
+                            placeholder="Buscar por nome, categoria ou contato..." 
+                            className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-slate-700 dark:text-white placeholder-slate-400"
+                            value={supplierSearch}
+                            onChange={(e) => setSupplierSearch(e.target.value)}
+                            autoFocus
+                        />
+                    </div>
+                </div>
+
+                {/* List Content */}
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-50/30 dark:bg-slate-900/20">
+                    <div className="space-y-3">
+                        {filteredSuppliers.map(sup => (
+                            <div key={sup.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col gap-2 hover:border-indigo-200 dark:hover:border-slate-600 transition-colors group">
+                                <div className="flex justify-between items-start">
+                                    <h4 className="font-bold text-slate-800 dark:text-white text-sm group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{sup.name}</h4>
+                                    <span className="text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-600">
+                                        {sup.category}
+                                    </span>
+                                </div>
+                                
+                                <div className="flex flex-col gap-1 mt-1">
+                                    {sup.contactName && (
+                                        <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                                            <UserIcon size={12} className="text-slate-400" />
+                                            <span>{sup.contactName}</span>
+                                        </div>
+                                    )}
+                                    {sup.contact && (
+                                        <div className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-200">
+                                            <Phone size={12} className="text-emerald-500" />
+                                            <span>{sup.contact}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                        {filteredSuppliers.length === 0 && (
+                            <div className="text-center py-10 text-slate-400 dark:text-slate-500">
+                                <p className="text-sm">Nenhum prestador encontrado.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+                
+                {/* Footer Tip */}
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-100 dark:border-slate-700 text-center">
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                        Para editar ou adicionar novos, acesse <strong>Configurações &gt; Gerenciar Prestadores</strong>.
+                    </p>
+                </div>
+            </div>
+        </div>
+      )}
+
     </div>
   );
 };

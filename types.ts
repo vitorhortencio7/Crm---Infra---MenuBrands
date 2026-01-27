@@ -44,6 +44,14 @@ export interface User {
   isGuest?: boolean; // Flag for anonymous/executive access
 }
 
+export interface Supplier {
+  id: string;
+  name: string; // Nome da Empresa
+  contactName?: string; // Nome do Contato (ex: Paulo)
+  category: string; // Ex: Elétrica, Hidráulica, Geral
+  contact?: string; // Telefone ou Email
+}
+
 export interface HistoryLog {
   id: string;
   date: string; // ISO String
