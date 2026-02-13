@@ -47,9 +47,9 @@ export interface User {
 export interface Supplier {
   id: string;
   name: string; // Nome da Empresa
-  contactName?: string; // Nome do Contato (ex: Paulo)
   category: string; // Ex: Elétrica, Hidráulica, Geral
-  contact?: string; // Telefone ou Email
+  contactInfo?: string; // Telefone ou Email (Renamed from contact/contactName to match backend)
+  active?: boolean;
 }
 
 export interface HistoryLog {
@@ -137,9 +137,10 @@ export interface PersonalTask {
   title: string;
   description?: string;
   dueDate?: string; // ISO Date
-  completed: boolean;
+  status: 'todo' | 'doing' | 'done'; // Changed from completed boolean
   priority: 'high' | 'medium' | 'low';
   linkedOSId?: string; // Optional link to an OS context
+  createdAt?: string;
 }
 
 export type NotificationType = 'new_os' | 'completed_os' | 'finance' | 'alert' | 'system';
