@@ -3,7 +3,9 @@
  * Handles API calls for ServiceOrders, Expenses, and Assets
  */
 
-import { API_URL } from './config';
+import { api } from './api';
+
+
 
 // ===== SERVICE ORDERS =====
 
@@ -17,119 +19,55 @@ export const serviceOrdersAPI = {
         owner_id?: number;
         archived?: boolean;
     }) {
-        const params = new URLSearchParams();
-        if (filters?.unit) params.append('unit', filters.unit);
-        if (filters?.status) params.append('status', filters.status);
-        if (filters?.owner_id) params.append('owner_id', filters.owner_id.toString());
-        if (filters?.archived !== undefined) params.append('archived', filters.archived.toString());
+        const data = await api.get('/infraestrutura/orders', { params: filters });
 
-        const response = await fetch(`${API_URL}/infraestrutura/orders?${params}`, {
-            credentials: 'include'
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to fetch service orders');
-        }
-
-        return response.json();
+        // Map backend fields to frontend types
+        return data.map((o: any) => ({
+            ...o,
+            id: o.id.toString(),
+            ownerId: o.owner_id?.toString(),
+            dateOpened: o.date_opened,
+            dateForecast: o.date_forecast,
+            dateClosed: o.date_closed,
+            history: o.history?.map((h: any) => ({
+                ...h,
+                userId: h.user_id?.toString()
+            })) || []
+        }));
     },
+
 
     /**
      * Create new service order
      */
-    async create(data: {
-        title: string;
-        unit: string;
-        description: string;
-        type: string;
-        priority: string;
-        owner_id: number;
-        date_forecast?: string;
-    }) {
-        const response = await fetch(`${API_URL}/infraestrutura/orders`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify(data)
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to create service order');
-        }
-
-        return response.json();
+    async create(data: any) {
+        return api.post('/infraestrutura/orders', data);
     },
+
 
     /**
      * Update service order
      */
-    async update(id: string, data: {
-        title?: string;
-        unit?: string;
-        description?: string;
-        status?: string;
-        type?: string;
-        priority?: string;
-        date_forecast?: string;
-        date_closed?: string;
-    }) {
-        const response = await fetch(`${API_URL}/infraestrutura/orders/${id}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify(data)
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to update service order');
-        }
-
-        return response.json();
+    async update(id: string, data: any) {
+        return api.put(`/infraestrutura/orders/${id}`, data);
     },
+
 
     /**
      * Add history log to service order
      */
     async addLog(id: string, message: string) {
-        const response = await fetch(`${API_URL}/infraestrutura/orders/${id}/log`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify({ message })
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to add log');
-        }
-
-        return response.json();
+        return api.post(`/infraestrutura/orders/${id}/log`, { message });
     },
+
 
     /**
      * Archive service order
      */
     async archive(id: string) {
-        const response = await fetch(`${API_URL}/infraestrutura/orders/${id}/archive`, {
-            method: 'PUT',
-            credentials: 'include'
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to archive service order');
-        }
-
-        return response.json();
+        return api.put(`/infraestrutura/orders/${id}/archive`);
     }
+
 };
 
 // ===== EXPENSES =====
@@ -143,93 +81,44 @@ export const expensesAPI = {
         month?: number;
         year?: number;
     }) {
-        const params = new URLSearchParams();
-        if (filters?.unit) params.append('unit', filters.unit);
-        if (filters?.month) params.append('month', filters.month.toString());
-        if (filters?.year) params.append('year', filters.year.toString());
+        const data = await api.get('/infraestrutura/expenses', { params: filters });
 
-        const response = await fetch(`${API_URL}/infraestrutura/expenses?${params}`, {
-            credentials: 'include'
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to fetch expenses');
-        }
-
-        return response.json();
+        // Map backend fields to frontend types
+        return data.map((e: any) => ({
+            ...e,
+            id: e.id.toString(),
+            warrantyPartsMonths: e.warranty_parts_months,
+            warrantyServiceMonths: e.warranty_service_months,
+            linkedOSId: e.linked_os_id,
+            paymentMethod: e.payment_method,
+            paymentData: e.payment_data
+        }));
     },
+
 
     /**
      * Create new expense
      */
-    async create(data: {
-        item: string;
-        value: number;
-        date: string;
-        supplier: string;
-        warranty_parts_months?: number;
-        warranty_service_months?: number;
-        linked_os_id?: string;
-        category: string;
-        payment_method: string;
-        unit: string;
-        status?: string;
-        payment_data?: any;
-    }) {
-        const response = await fetch(`${API_URL}/infraestrutura/expenses`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify(data)
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to create expense');
-        }
-
-        return response.json();
+    async create(data: any) {
+        return api.post('/infraestrutura/expenses', data);
     },
+
 
     /**
      * Update expense
      */
     async update(id: string, data: any) {
-        const response = await fetch(`${API_URL}/infraestrutura/expenses/${id}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify(data)
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to update expense');
-        }
-
-        return response.json();
+        return api.put(`/infraestrutura/expenses/${id}`, data);
     },
+
 
     /**
      * Delete expense (admin only)
      */
     async delete(id: string) {
-        const response = await fetch(`${API_URL}/infraestrutura/expenses/${id}`, {
-            method: 'DELETE',
-            credentials: 'include'
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to delete expense');
-        }
-
-        return response.json();
+        return api.delete(`/infraestrutura/expenses/${id}`);
     }
+
 };
 
 // ===== ASSETS =====
@@ -243,226 +132,119 @@ export const assetsAPI = {
         category?: string;
         status?: string;
     }) {
-        const params = new URLSearchParams();
-        if (filters?.unit) params.append('unit', filters.unit);
-        if (filters?.category) params.append('category', filters.category);
-        if (filters?.status) params.append('status', filters.status);
+        const data = await api.get('/infraestrutura/assets', { params: filters });
 
-        const response = await fetch(`${API_URL}/infraestrutura/assets?${params}`, {
-            credentials: 'include'
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to fetch assets');
-        }
-
-        return response.json();
+        // Map backend fields to frontend types
+        return data.map((a: any) => ({
+            ...a,
+            id: a.id.toString(),
+            assetTag: a.asset_tag,
+            photoUrl: a.photo_url,
+            registrationDate: a.registration_date,
+            invoiceInfo: a.invoice_info
+        }));
     },
+
 
     /**
      * Create new asset
      */
-    async create(data: {
-        asset_tag: string;
-        name: string;
-        unit: string;
-        category: string;
-        brand?: string;
-        model?: string;
-        description?: string;
-        value?: number;
-        photo_url?: string;
-        registration_date: string;
-        warranty?: any;
-        invoice_info?: any;
-    }) {
-        const response = await fetch(`${API_URL}/infraestrutura/assets`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify(data)
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to create asset');
-        }
-
-        return response.json();
+    async create(data: any) {
+        return api.post('/infraestrutura/assets', data);
     },
+
 
     /**
      * Update asset
      */
     async update(id: number, data: any) {
-        const response = await fetch(`${API_URL}/infraestrutura/assets/${id}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify(data)
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to update asset');
-        }
-
-        return response.json();
+        return api.put(`/infraestrutura/assets/${id}`, data);
     },
+
 
     /**
      * Delete asset (admin only)
      */
     async delete(id: number) {
-        const response = await fetch(`${API_URL}/infraestrutura/assets/${id}`, {
-            method: 'DELETE',
-            credentials: 'include'
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to delete asset');
-        }
-
-        return response.json();
+        return api.delete(`/infraestrutura/assets/${id}`);
     },
+
 
     /**
      * Send asset to maintenance
      */
-    async sendToMaintenance(data: {
-        asset_id: number;
-        provider_name: string;
-        contact_info?: string;
-        date_out: string;
-        date_return_forecast?: string;
-        description: string;
-    }) {
-        const response = await fetch(`${API_URL}/infraestrutura/assets/maintenance`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify(data)
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to send asset to maintenance');
-        }
-
-        return response.json();
+    async sendToMaintenance(data: any) {
+        return api.post('/infraestrutura/assets/maintenance', data);
     },
+
 
     /**
      * Return asset from maintenance
      */
     async returnFromMaintenance(maintenanceId: number, dateReturned?: string) {
         const body = dateReturned ? { date_returned: dateReturned } : {};
-
-        const response = await fetch(`${API_URL}/infraestrutura/assets/maintenance/${maintenanceId}/return`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify(body)
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to return asset from maintenance');
-        }
-
-        return response.json();
+        return api.put(`/infraestrutura/assets/maintenance/${maintenanceId}/return`, body);
     }
+
 };
 
 // ===== SUPPLIERS =====
 
 export const suppliersAPI = {
     async list() {
-        const response = await fetch(`${API_URL}/infraestrutura/suppliers`, { credentials: 'include' });
-        if (!response.ok) throw new Error('Failed to fetch suppliers');
-        return response.json();
+        return api.get('/infraestrutura/suppliers');
     },
 
-    async create(data: { name: string; category: string; contact_info?: string }) {
-        const response = await fetch(`${API_URL}/infraestrutura/suppliers`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify(data)
-        });
-        if (!response.ok) throw new Error('Failed to create supplier');
-        return response.json();
+
+    async create(data: any) {
+        return api.post('/infraestrutura/suppliers', data);
     },
+
 
     async update(id: number, data: any) {
-        const response = await fetch(`${API_URL}/infraestrutura/suppliers/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify(data)
-        });
-        if (!response.ok) throw new Error('Failed to update supplier');
-        return response.json();
+        return api.put(`/infraestrutura/suppliers/${id}`, data);
     },
 
+
     async delete(id: number) {
-        const response = await fetch(`${API_URL}/infraestrutura/suppliers/${id}`, {
-            method: 'DELETE',
-            credentials: 'include'
-        });
-        if (!response.ok) throw new Error('Failed to delete supplier');
-        return response.json();
+        return api.delete(`/infraestrutura/suppliers/${id}`);
     }
+
 };
 
 // ===== TASKS =====
 
 export const tasksAPI = {
     async list() {
-        const response = await fetch(`${API_URL}/infraestrutura/tasks`, { credentials: 'include' });
-        if (!response.ok) throw new Error('Failed to fetch tasks');
-        return response.json();
+        const data = await api.get('/infraestrutura/tasks');
+        return data.map((t: any) => ({
+            id: t.id.toString(),
+            userId: t.user_id?.toString(),
+            title: t.title,
+            description: t.description,
+            dueDate: t.due_date,
+            priority: t.priority,
+            status: t.status,
+            linkedOSId: t.linked_os_id,
+            createdAt: t.created_at
+        }));
     },
+
 
     async create(data: any) {
-        const response = await fetch(`${API_URL}/infraestrutura/tasks`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify(data)
-        });
-        if (!response.ok) throw new Error('Failed to create task');
-        return response.json();
+        return api.post('/infraestrutura/tasks', data);
     },
+
 
     async update(id: number, data: any) {
-        const response = await fetch(`${API_URL}/infraestrutura/tasks/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify(data)
-        });
-        if (!response.ok) throw new Error('Failed to update task');
-        return response.json();
+        return api.put(`/infraestrutura/tasks/${id}`, data);
     },
 
+
     async delete(id: number) {
-        const response = await fetch(`${API_URL}/infraestrutura/tasks/${id}`, {
-            method: 'DELETE',
-            credentials: 'include'
-        });
-        if (!response.ok) throw new Error('Failed to delete task');
-        return response.json();
+        return api.delete(`/infraestrutura/tasks/${id}`);
     }
+
 };
 
 // Export all APIs
