@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User } from '../types';
 import { Lock, ArrowLeft, ShieldCheck, ChevronRight, BarChart3, UserPlus, Mail } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
@@ -62,8 +62,10 @@ export const Login: React.FC<LoginProps> = ({
 
             // Store token for reference (cookie is primary auth method)
             localStorage.setItem('access_token', data.access_token);
+            localStorage.setItem('user', JSON.stringify(authenticatedUser));
 
             onLogin(authenticatedUser);
+
         } catch (error: any) {
             console.error('Login error:', error);
             setError(error.message || 'Usuário ou senha incorretos.');
@@ -92,8 +94,10 @@ export const Login: React.FC<LoginProps> = ({
         // Here we just pass it up to App.tsx via onLogin (simulating immediate login)
         // Note: App.tsx needs to handle adding this user to state if it wants persistence in this session.
         // Ideally, Login shouldn't mutate Users, but for "First Access" simulation, we trigger login directly.
+        localStorage.setItem('user', JSON.stringify(newAdmin));
         onLogin(newAdmin);
     };
+
 
     const handleGuestLogin = () => {
         const guestUser: User = {
@@ -106,8 +110,10 @@ export const Login: React.FC<LoginProps> = ({
             isAdmin: false,
             isGuest: true
         };
+        localStorage.setItem('user', JSON.stringify(guestUser));
         onLogin(guestUser);
     };
+
 
     const handleUserSelect = (user: User) => {
         setSelectedUser(user);

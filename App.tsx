@@ -25,6 +25,7 @@ import { authService } from './lib/auth';
 import { infrastructureAPI } from './lib/infrastructure';
 import { usersAPI } from './lib/users';
 import { notificationsAPI } from './lib/notifications';
+import { USE_MOCK } from './lib/config';
 
 type View = 'dashboard' | 'kanban' | 'finance' | 'reports' | 'tasks' | 'settings' | 'assets' | 'calendar';
 type Theme = 'light' | 'dark';
@@ -73,87 +74,70 @@ const App: React.FC = () => {
     const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([]);
     const [assetCategories, setAssetCategories] = useState<string[]>(Object.values(AssetCategory));
 
-    // --- DATA LOADING LOGIC (Mocks vs Prod) ---
-    // --- DATA LOADING LOGIC ---
+    // --- SESSION RESTORATION ---
+    useEffect(() => {
+        const savedUser = localStorage.getItem('user');
+        if (savedUser) {
+            try {
+                const user = JSON.parse(savedUser);
+                setCurrentUser(user);
+
+                // If not in mock mode, we could validate the token here
+                if (!USE_MOCK) {
+                    authService.validateToken().then(isValid => {
+                        if (!isValid) handleLogout();
+                    }).catch(err => {
+                        console.error("Token validation failed:", err);
+                    });
+                }
+            } catch (e) {
+                console.error("Failed to restore session:", e);
+            }
+        }
+
+        // Load initial users for Login screen if in mock mode
+        if (USE_MOCK) {
+            setUsers(MOCK_USERS);
+        } else {
+            // Load real users if possible or from cache
+            try {
+                const cached = localStorage.getItem('crm_users');
+                if (cached) setUsers(JSON.parse(cached));
+            } catch (e) {
+                console.error("Failed to load cached users:", e);
+            }
+        }
+    }, []);
+
     useEffect(() => {
         const fetchInitialData = async () => {
             if (!currentUser) return;
 
             try {
                 // Fetch all data in parallel
-                const [ordersData, expensesData, assetsData, suppliersData, tasksData, notificationsData] = await Promise.all([
+                const [ordersData, expensesData, assetsData, suppliersData, tasksData, notificationsData, usersDataResult] = await Promise.all([
                     infrastructureAPI.serviceOrders.list(),
                     infrastructureAPI.expenses.list(),
                     infrastructureAPI.assets.list(),
                     infrastructureAPI.suppliers.list(),
                     infrastructureAPI.tasks.list(),
-                    notificationsAPI.list()
+                    notificationsAPI.list(),
+                    usersAPI.list()
                 ]);
 
-                // Map Orders (snake_case -> camelCase)
-                const mappedOrders = ordersData.map((o: any) => ({
-                    ...o,
-                    id: o.id.toString(),
-                    ownerId: o.owner_id?.toString(),
-                    dateOpened: o.date_opened,
-                    dateForecast: o.date_forecast,
-                    dateClosed: o.date_closed,
-                    history: o.history?.map((h: any) => ({
-                        ...h,
-                        userId: h.user_id?.toString()
-                    })) || []
-                }));
-                setOrders(mappedOrders);
-
-                // Map Expenses
-                const mappedExpenses = expensesData.map((e: any) => ({
-                    ...e,
-                    id: e.id.toString(),
-                    warrantyPartsMonths: e.warranty_parts_months,
-                    warrantyServiceMonths: e.warranty_service_months,
-                    linkedOSId: e.linked_os_id,
-                    paymentMethod: e.payment_method,
-                    paymentData: e.payment_data
-                }));
-                setExpenses(mappedExpenses);
-
-                // Map Assets
-                const mappedAssets = assetsData.map((a: any) => ({
-                    ...a,
-                    id: a.id.toString(),
-                    assetTag: a.asset_tag,
-                    photoUrl: a.photo_url,
-                    registrationDate: a.registration_date,
-                    invoiceInfo: a.invoice_info
-                }));
-                setAssets(mappedAssets);
-                setExpenses(expensesData.map((e: any) => ({ ...e, id: e.id.toString(), date: e.date, unit: e.unit, supplier: e.supplier, value: e.value, description: e.description, category: e.category, status: e.status, proofUrl: e.proof_url })));
+                setOrders(ordersData);
+                setExpenses(expensesData);
                 setAssets(assetsData);
                 setSuppliers(suppliersData);
-
-                // Map Tasks (snake_case -> camelCase)
-                setTasks(tasksData.map((t: any) => ({
-                    id: t.id.toString(),
-                    userId: t.user_id?.toString(),
-                    title: t.title,
-                    description: t.description,
-                    dueDate: t.due_date,
-                    priority: t.priority,
-                    status: t.status,
-                    linkedOSId: t.linked_os_id,
-                    createdAt: t.created_at
-                })));
-
+                setTasks(tasksData);
                 setNotifications(notificationsData);
-                // Fetch Users (Real API)
-                const usersData = await usersAPI.list();
-                setUsers(usersData);
+                setUsers(usersDataResult);
+
 
             } catch (error) {
                 console.error("Failed to fetch initial data:", error);
-                // Fallback to mocks in Dev
-                const isDev = (import.meta as any).env && (import.meta as any).env.DEV;
-                if (isDev) {
+                // Fallback to mocks if enabled (even if not in dev)
+                if (USE_MOCK) {
                     console.log("⚠️ API Error. Falling back to Mocks...");
                     setOrders(MOCK_ORDERS);
                     setExpenses(MOCK_EXPENSES);
@@ -169,6 +153,7 @@ const App: React.FC = () => {
 
         fetchInitialData();
     }, [currentUser]);
+
 
     // Sync Users to LocalStorage in Prod (to allow the created Admin to persist)
     useEffect(() => {
@@ -264,8 +249,11 @@ const App: React.FC = () => {
     const handleLogout = async () => {
         await authService.logout();
         setCurrentUser(null);
+        localStorage.removeItem('user');
+        localStorage.removeItem('access_token');
         // In Dev, reset notifications to mock. In Prod, maybe clear?
-        if ((import.meta as any).env && (import.meta as any).env.DEV) {
+        const isDev = (import.meta as any).env && (import.meta as any).env.DEV;
+        if (isDev) {
             setNotifications(MOCK_NOTIFICATIONS);
         } else {
             setNotifications([]);
@@ -363,20 +351,10 @@ const App: React.FC = () => {
                 await infrastructureAPI.serviceOrders.create(payload);
             }
 
-            // Reload data
-            const ordersData = await infrastructureAPI.serviceOrders.list();
-            const mappedOrders = ordersData.map((o: any) => ({
-                ...o,
-                ownerId: o.owner_id,
-                dateOpened: o.date_opened,
-                dateForecast: o.date_forecast,
-                dateClosed: o.date_closed,
-                history: o.history?.map((h: any) => ({
-                    ...h,
-                    userId: h.user_id
-                })) || []
-            }));
+            // Reload data (directly use services, they handle mapping now)
+            const mappedOrders = await infrastructureAPI.serviceOrders.list();
             setOrders(mappedOrders);
+
 
         } catch (error) {
             console.error("Failed to save OS:", error);
@@ -413,16 +391,9 @@ const App: React.FC = () => {
                 payment_data: expense.paymentData,
             });
             // Reload
-            const data = await infrastructureAPI.expenses.list();
-            const mapped = data.map((e: any) => ({
-                ...e,
-                warrantyPartsMonths: e.warranty_parts_months,
-                warrantyServiceMonths: e.warranty_service_months,
-                linkedOSId: e.linked_os_id,
-                paymentMethod: e.payment_method,
-                paymentData: e.payment_data
-            }));
-            setExpenses(mapped);
+            const mappedExpenses = await infrastructureAPI.expenses.list();
+            setExpenses(mappedExpenses);
+
 
             addNotification({
                 title: 'Novo Gasto Registrado',
@@ -716,16 +687,10 @@ const App: React.FC = () => {
             }
 
             // Reload assets
-            const assetsData = await infrastructureAPI.assets.list();
-            const mappedAssets = assetsData.map((a: any) => ({
-                ...a,
-                assetTag: a.asset_tag,
-                photoUrl: a.photo_url,
-                registrationDate: a.registration_date,
-                invoiceInfo: a.invoice_info
-            }));
+            const mappedAssets = await infrastructureAPI.assets.list();
             setAssets(mappedAssets);
             setIsAssetModalOpen(false);
+
 
         } catch (error) {
             console.error(error);
@@ -765,15 +730,9 @@ const App: React.FC = () => {
             });
 
             // Reload to get updated status
-            const assetsData = await infrastructureAPI.assets.list();
-            const mappedAssets = assetsData.map((a: any) => ({
-                ...a,
-                assetTag: a.asset_tag,
-                photoUrl: a.photo_url,
-                registrationDate: a.registration_date,
-                invoiceInfo: a.invoice_info
-            }));
+            const mappedAssets = await infrastructureAPI.assets.list();
             setAssets(mappedAssets);
+
 
         } catch (error) {
             console.error(error);
@@ -788,15 +747,9 @@ const App: React.FC = () => {
             await infrastructureAPI.assets.returnFromMaintenance(parseInt(recordId));
 
             // Recaload assets
-            const assetsData = await infrastructureAPI.assets.list();
-            const mappedAssets = assetsData.map((a: any) => ({
-                ...a,
-                assetTag: a.asset_tag,
-                photoUrl: a.photo_url,
-                registrationDate: a.registration_date,
-                invoiceInfo: a.invoice_info
-            }));
+            const mappedAssets = await infrastructureAPI.assets.list();
             setAssets(mappedAssets);
+
 
         } catch (error) {
             console.error(error);

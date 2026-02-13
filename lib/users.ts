@@ -1,24 +1,16 @@
 import { User } from '../types';
 
-import { API_URL } from './config';
+import { api } from './api';
+
+
 
 const realUsersAPI = {
     /**
      * List all users (Admin only)
      */
     async list(): Promise<User[]> {
-        const token = localStorage.getItem('access_token');
-        const response = await fetch(`${API_URL}/auth/listar_usuarios`, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
+        const data = await api.get('/auth/listar_usuarios');
 
-        if (!response.ok) {
-            throw new Error('Failed to fetch users');
-        }
-
-        const data = await response.json();
 
         // Map backend fields to frontend User type
         return data.map((u: any) => ({
@@ -38,8 +30,6 @@ const realUsersAPI = {
      * Create new user
      */
     async create(user: Partial<User>, password?: string): Promise<any> {
-        const token = localStorage.getItem('access_token');
-
         // Map frontend User to backend CadastrarUsuario
         const payload = {
             usuario: user.email?.split('@')[0] || user.name?.toLowerCase().replace(/\s/g, ''), // Generate username
@@ -51,29 +41,14 @@ const realUsersAPI = {
             role: user.isAdmin ? 'admin' : (user.role || 'visitor')
         };
 
-        const response = await fetch(`${API_URL}/auth/cadastrar_usuario`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.msg || 'Failed to create user');
-        }
-
-        return response.json();
+        return api.post('/auth/cadastrar_usuario', payload);
     },
+
 
     /**
      * Update existing user
      */
     async update(user: User): Promise<any> {
-        const token = localStorage.getItem('access_token');
-
         // Map frontend User to backend AtualizarUsuario
         const payload = {
             id: parseInt(user.id),
@@ -85,41 +60,17 @@ const realUsersAPI = {
             // password is updated separately or if provided
         };
 
-        const response = await fetch(`${API_URL}/auth/atualizar_usuario`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.msg || 'Failed to update user');
-        }
-
-        return response.json();
+        return api.put('/auth/atualizar_usuario', payload);
     },
+
 
     /**
      * Delete user
      */
     async delete(userId: string): Promise<any> {
-        const token = localStorage.getItem('access_token');
-        const response = await fetch(`${API_URL}/auth/deletar_usuario/${userId}`, {
-            method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to delete user');
-        }
-
-        return response.json();
+        return api.delete(`/auth/deletar_usuario/${userId}`);
     }
+
 };
 
 import { USE_MOCK } from './config';
